@@ -33,19 +33,19 @@ func (h *Handler) Shorten(w http.ResponseWriter, r *http.Request) {
 		URL string `json:"url"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		writeError(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
 
 	req.URL = strings.TrimSpace(req.URL)
 	if req.URL == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "url is required"})
+		writeError(w, http.StatusBadRequest, "url is required")
 		return
 	}
 
 	parsed, err := url.Parse(req.URL)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid url"})
+		writeError(w, http.StatusBadRequest, "invalid url")
 		return
 	}
 
@@ -57,12 +57,12 @@ func (h *Handler) Shorten(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		if !isConstraintError(err) {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create short URL"})
+			writeError(w, http.StatusInternalServerError, "failed to create short URL")
 			return
 		}
 	}
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create short URL"})
+		writeError(w, http.StatusInternalServerError, "failed to create short URL")
 		return
 	}
 
@@ -75,17 +75,17 @@ func (h *Handler) Shorten(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Resolve(w http.ResponseWriter, r *http.Request) {
 	code := r.PathValue("code")
 	if code == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code is required"})
+		writeError(w, http.StatusBadRequest, "code is required")
 		return
 	}
 
 	u, err := h.store.GetByCode(code)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+			writeError(w, http.StatusNotFound, "not found")
 			return
 		}
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -104,6 +104,10 @@ func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
+}
+
+func writeError(w http.ResponseWriter, status int, msg string) {
+	writeJSON(w, status, map[string]string{"error": msg})
 }
 
 func isConstraintError(err error) bool {
