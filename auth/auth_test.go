@@ -35,6 +35,9 @@ func TestMissingHeader(t *testing.T) {
 	if rr.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401, got %d", rr.Code)
 	}
+	if ct := rr.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %s", ct)
+	}
 }
 
 func TestWrongToken(t *testing.T) {
@@ -47,6 +50,9 @@ func TestWrongToken(t *testing.T) {
 
 	if rr.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401, got %d", rr.Code)
+	}
+	if ct := rr.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %s", ct)
 	}
 }
 
