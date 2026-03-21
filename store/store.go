@@ -37,6 +37,10 @@ func New(dbPath string) (*Store, error) {
 		return nil, err
 	}
 
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(5 * time.Minute)
+
 	return &Store{db: db}, nil
 }
 
