@@ -2,13 +2,16 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"urlshortener/auth"
+	"urlshortener/handler"
+	"urlshortener/store"
 )
 
 func main() {
@@ -17,11 +20,23 @@ func main() {
 		log.Fatal("SHORTENER_TOKEN environment variable is required")
 	}
 
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "shortener.db"
+	}
+
+	s, err := store.New(dbPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer s.Close()
+
+	h := handler.New(s)
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"status":"ok"}`)
-	})
+	mux.HandleFunc("GET /health", h.Health)
+	mux.Handle("POST /shorten", auth.Middleware(token, http.HandlerFunc(h.Shorten)))
+	mux.HandleFunc("GET /{code}", h.Resolve)
 
 	srv := &http.Server{
 		Addr:    ":8080",
