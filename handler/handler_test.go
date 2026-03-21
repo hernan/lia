@@ -236,6 +236,29 @@ func TestShortenValidHTTPURL(t *testing.T) {
 	}
 }
 
+func TestShortenRejectsDangerousSchemes(t *testing.T) {
+	_, ts := newTestHandler(t)
+
+	schemes := []string{
+		`{"url":"javascript:alert(1)"}`,
+		`{"url":"file:///etc/passwd"}`,
+		`{"url":"data:text/html,<h1>hi</h1>"}`,
+		`{"url":"ftp://example.com/file"}`,
+	}
+
+	for _, body := range schemes {
+		resp, err := http.Post(ts.URL+"/shorten", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("expected 400 for %s, got %d", body, resp.StatusCode)
+		}
+	}
+}
+
 func TestShortenRetriesOnCollision(t *testing.T) {
 	mock := &collisionMockStore{failOnce: true}
 	h := New(mock)

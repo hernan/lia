@@ -48,7 +48,7 @@ func (h *Handler) Shorten(w http.ResponseWriter, r *http.Request) {
 	}
 
 	parsed, err := url.Parse(req.URL)
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		writeError(w, http.StatusBadRequest, "invalid url")
 		return
 	}
