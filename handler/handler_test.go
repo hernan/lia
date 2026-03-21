@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mattn/go-sqlite3"
+
 	"urlshortener/store"
 )
 
@@ -35,7 +37,10 @@ type collisionMockStore struct {
 func (m *collisionMockStore) Create(originalURL, code string) (*store.URL, error) {
 	m.createCalls++
 	if m.failOnce && m.createCalls == 1 {
-		return nil, errors.New("UNIQUE constraint failed: urls.code")
+		return nil, sqlite3.Error{
+			Code:         sqlite3.ErrConstraint,
+			ExtendedCode: sqlite3.ErrConstraintUnique,
+		}
 	}
 	return &store.URL{
 		Code:        code,

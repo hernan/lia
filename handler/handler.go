@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/mattn/go-sqlite3"
+
 	"urlshortener/shortener"
 	"urlshortener/store"
 )
@@ -115,5 +117,9 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 }
 
 func isConstraintError(err error) bool {
-	return strings.Contains(err.Error(), "UNIQUE constraint failed")
+	var sqliteErr sqlite3.Error
+	if errors.As(err, &sqliteErr) {
+		return sqliteErr.Code == sqlite3.ErrConstraint
+	}
+	return false
 }
