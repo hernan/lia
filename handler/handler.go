@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"urlshortener/shortener"
@@ -37,6 +38,12 @@ func (h *Handler) Shorten(w http.ResponseWriter, r *http.Request) {
 	req.URL = strings.TrimSpace(req.URL)
 	if req.URL == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "url is required"})
+		return
+	}
+
+	parsed, err := url.Parse(req.URL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid url"})
 		return
 	}
 

@@ -155,6 +155,66 @@ func TestShortenEmptyURL(t *testing.T) {
 	}
 }
 
+func TestShortenInvalidURL(t *testing.T) {
+	_, ts := newTestHandler(t)
+
+	body := `{"url":"not a url"}`
+	resp, err := http.Post(ts.URL+"/shorten", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestShortenURLMissingScheme(t *testing.T) {
+	_, ts := newTestHandler(t)
+
+	body := `{"url":"example.com"}`
+	resp, err := http.Post(ts.URL+"/shorten", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestShortenURLMissingHost(t *testing.T) {
+	_, ts := newTestHandler(t)
+
+	body := `{"url":"https://"}`
+	resp, err := http.Post(ts.URL+"/shorten", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestShortenValidHTTPURL(t *testing.T) {
+	_, ts := newTestHandler(t)
+
+	body := `{"url":"http://example.com/path"}`
+	resp, err := http.Post(ts.URL+"/shorten", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		t.Errorf("expected 201, got %d", resp.StatusCode)
+	}
+}
+
 func TestResolveNotFound(t *testing.T) {
 	_, ts := newTestHandler(t)
 
