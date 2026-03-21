@@ -6,6 +6,7 @@ A simple URL shortener API built with Go, using SQLite for storage.
 
 ```
 ├── main.go                  # Server + routing + graceful shutdown
+├── main_test.go             # Config loading tests
 ├── store/store.go           # SQLite CRUD (Create, GetByCode)
 ├── shortener/shortener.go   # Random 6-char code generator
 ├── auth/auth.go             # Bearer token middleware
@@ -28,10 +29,19 @@ Set the required environment variable and start the server:
 SHORTENER_TOKEN=mysecret go run .
 ```
 
-Optionally set `DB_PATH` to choose where SQLite stores data (defaults to `shortener.db`):
+## Configuration
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `SHORTENER_TOKEN` | Yes | — | Bearer token for the `/shorten` endpoint |
+| `DB_PATH` | No | `shortener.db` | Path to SQLite database file |
+| `PORT` | No | `8080` | Server listen port |
+| `SHUTDOWN_TIMEOUT` | No | `5s` | Graceful shutdown timeout (Go duration) |
+
+Example with custom config:
 
 ```bash
-SHORTENER_TOKEN=mysecret DB_PATH=data.db go run .
+SHORTENER_TOKEN=mysecret DB_PATH=data.db PORT=9090 SHUTDOWN_TIMEOUT=10s go run .
 ```
 
 ## Usage

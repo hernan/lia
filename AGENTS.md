@@ -7,6 +7,7 @@ The only external dependency is `github.com/mattn/go-sqlite3`.
 
 ```
 ├── main.go                  # Entry point, routing, graceful shutdown
+├── main_test.go             # Config loading tests
 ├── store/store.go           # SQLite CRUD operations
 ├── shortener/shortener.go   # Random 6-char code generator
 ├── auth/auth.go             # Bearer token middleware
@@ -28,6 +29,17 @@ go mod tidy                                               # update go.sum after 
 ```
 
 There is no linter configured. Run `go vet ./...` for basic static analysis.
+
+## Configuration
+
+All configuration is via environment variables:
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `SHORTENER_TOKEN` | Yes | — | Bearer token for the `/shorten` endpoint |
+| `DB_PATH` | No | `shortener.db` | Path to SQLite database file |
+| `PORT` | No | `8080` | Server listen port |
+| `SHUTDOWN_TIMEOUT` | No | `5s` | Graceful shutdown timeout (Go duration) |
 
 ## Code style
 
@@ -72,7 +84,16 @@ if err != nil {
 A `writeJSON` helper in the handler package encodes responses:
 
 ```go
-writeJSON(w, http.StatusBadRequest, map[string]string{"error": "url is required"})
+writeJSON(w, http.StatusCreated, map[string]interface{}{
+	"code": created.Code,
+	"url":  created.OriginalURL,
+})
+```
+
+A `writeError` helper wraps the common error pattern:
+
+```go
+writeError(w, http.StatusBadRequest, "url is required")
 ```
 
 ### Structs
@@ -93,3 +114,4 @@ than exporting struct fields.
   package and provide mock implementations in the `_test.go` file.
 - No external test frameworks — use the standard `testing` package only.
 - Use `t.Fatal` for setup errors, `t.Errorf` for assertion failures.
+- Use `t.Setenv()` to set environment variables in tests (automatically restored).
