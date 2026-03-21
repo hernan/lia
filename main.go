@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -14,10 +15,17 @@ import (
 	"urlshortener/store"
 )
 
-func main() {
+type config struct {
+	token           string
+	dbPath          string
+	addr            string
+	shutdownTimeout time.Duration
+}
+
+func loadConfig() (config, error) {
 	token := os.Getenv("SHORTENER_TOKEN")
 	if token == "" {
-		log.Fatal("SHORTENER_TOKEN environment variable is required")
+		return config{}, fmt.Errorf("SHORTENER_TOKEN environment variable is required")
 	}
 
 	dbPath := os.Getenv("DB_PATH")
@@ -25,7 +33,35 @@ func main() {
 		dbPath = "shortener.db"
 	}
 
-	s, err := store.New(dbPath)
+	addr := os.Getenv("PORT")
+	if addr == "" {
+		addr = "8080"
+	}
+
+	shutdownTimeout := 5 * time.Second
+	if v := os.Getenv("SHUTDOWN_TIMEOUT"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return config{}, fmt.Errorf("invalid SHUTDOWN_TIMEOUT: %w", err)
+		}
+		shutdownTimeout = d
+	}
+
+	return config{
+		token:           token,
+		dbPath:          dbPath,
+		addr:            ":" + addr,
+		shutdownTimeout: shutdownTimeout,
+	}, nil
+}
+
+func main() {
+	cfg, err := loadConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	s, err := store.New(cfg.dbPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -35,11 +71,11 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", h.Health)
-	mux.Handle("POST /shorten", auth.Middleware(token, http.HandlerFunc(h.Shorten)))
+	mux.Handle("POST /shorten", auth.Middleware(cfg.token, http.HandlerFunc(h.Shorten)))
 	mux.HandleFunc("GET /{code}", h.Resolve)
 
 	srv := &http.Server{
-		Addr:    ":8080",
+		Addr:    cfg.addr,
 		Handler: mux,
 	}
 
@@ -48,12 +84,12 @@ func main() {
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
 		log.Println("shutting down...")
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), cfg.shutdownTimeout)
 		defer cancel()
 		srv.Shutdown(ctx)
 	}()
 
-	log.Println("listening on :8080")
+	log.Printf("listening on %s", cfg.addr)
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
