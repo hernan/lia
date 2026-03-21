@@ -2,6 +2,7 @@ package store
 
 import (
 	"testing"
+	"time"
 )
 
 func newTestStore(t *testing.T) *Store {
@@ -47,6 +48,34 @@ func TestGetByCodeNotFound(t *testing.T) {
 	_, err := s.GetByCode("nonexistent")
 	if err == nil {
 		t.Fatal("expected error for nonexistent code")
+	}
+}
+
+func TestCreateCreatedAtMatchesDB(t *testing.T) {
+	s := newTestStore(t)
+
+	before := time.Now().UTC()
+	created, err := s.Create("https://example.com", "time1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	after := time.Now().UTC()
+
+	fetched, err := s.GetByCode("time1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if created.CreatedAt.Before(before) || created.CreatedAt.After(after) {
+		t.Errorf("returned CreatedAt %v not between %v and %v", created.CreatedAt, before, after)
+	}
+
+	diff := created.CreatedAt.Sub(fetched.CreatedAt)
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > time.Second {
+		t.Errorf("returned CreatedAt %v differs from DB CreatedAt %v by %v", created.CreatedAt, fetched.CreatedAt, diff)
 	}
 }
 

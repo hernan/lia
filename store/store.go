@@ -57,7 +57,7 @@ func (s *Store) Create(originalURL, code string) (*URL, error) {
 		ID:          id,
 		Code:        code,
 		OriginalURL: originalURL,
-		CreatedAt:   time.Now(),
+		CreatedAt:   time.Now().UTC(),
 	}, nil
 }
 
