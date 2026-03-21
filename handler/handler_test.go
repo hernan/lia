@@ -115,8 +115,6 @@ func TestShortenAndResolve(t *testing.T) {
 		t.Errorf("expected 201, got %d", resp.StatusCode)
 	}
 
-	// Get the code from the response by reading the Location header
-	// Actually, we need to read the JSON response
 	var result struct {
 		Code string `json:"code"`
 		URL  string `json:"url"`
@@ -130,7 +128,6 @@ func TestShortenAndResolve(t *testing.T) {
 		t.Errorf("expected URL https://example.com, got %s", result.URL)
 	}
 
-	// Now resolve it — follow redirect manually
 	client := &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
@@ -259,6 +256,21 @@ func TestShortenRetriesOnCollision(t *testing.T) {
 	}
 	if mock.createCalls != 2 {
 		t.Errorf("expected 2 create calls (1 fail + 1 success), got %d", mock.createCalls)
+	}
+}
+
+func TestShortenBodyTooLarge(t *testing.T) {
+	_, ts := newTestHandler(t)
+
+	largeBody := `{"url":"` + strings.Repeat("a", maxBodySize+1) + `"}`
+	resp, err := http.Post(ts.URL+"/shorten", "application/json", strings.NewReader(largeBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
 	}
 }
 

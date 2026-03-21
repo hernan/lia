@@ -12,7 +12,10 @@ import (
 	"urlshortener/store"
 )
 
-const maxRetries = 5
+const (
+	maxRetries  = 5
+	maxBodySize = 1 << 20 // 1MB
+)
 
 type URLStore interface {
 	Create(originalURL, code string) (*store.URL, error)
@@ -32,6 +35,7 @@ func (h *Handler) Shorten(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		URL string `json:"url"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON")
 		return
