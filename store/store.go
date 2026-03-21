@@ -49,7 +49,10 @@ func (s *Store) Create(originalURL, code string) (*URL, error) {
 		return nil, err
 	}
 
-	id, _ := result.LastInsertId()
+	id, err := result.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
 	return &URL{
 		ID:          id,
 		Code:        code,

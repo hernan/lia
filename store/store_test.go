@@ -50,6 +50,26 @@ func TestGetByCodeNotFound(t *testing.T) {
 	}
 }
 
+func TestCreateReturnsPopulatedID(t *testing.T) {
+	s := newTestStore(t)
+
+	created, err := s.Create("https://example.com", "abc123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.ID <= 0 {
+		t.Errorf("expected positive ID, got %d", created.ID)
+	}
+
+	second, err := s.Create("https://example.com", "def456")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.ID <= created.ID {
+		t.Errorf("expected second ID (%d) > first ID (%d)", second.ID, created.ID)
+	}
+}
+
 func TestCreateDuplicateCode(t *testing.T) {
 	s := newTestStore(t)
 
