@@ -12,6 +12,8 @@ import (
 	"urlshortener/store"
 )
 
+const maxRetries = 5
+
 type URLStore interface {
 	Create(originalURL, code string) (*store.URL, error)
 	GetByCode(code string) (*store.URL, error)
@@ -47,8 +49,18 @@ func (h *Handler) Shorten(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	code := shortener.Generate()
-	created, err := h.store.Create(req.URL, code)
+	var created *store.URL
+	for i := 0; i < maxRetries; i++ {
+		code := shortener.Generate()
+		created, err = h.store.Create(req.URL, code)
+		if err == nil {
+			break
+		}
+		if !isConstraintError(err) {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create short URL"})
+			return
+		}
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create short URL"})
 		return
@@ -92,4 +104,8 @@ func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
+}
+
+func isConstraintError(err error) bool {
+	return strings.Contains(err.Error(), "UNIQUE constraint failed")
 }

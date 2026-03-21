@@ -27,6 +27,30 @@ func (m *mockStore) Ping() error {
 	return m.pingErr
 }
 
+type collisionMockStore struct {
+	createCalls int
+	failOnce    bool
+}
+
+func (m *collisionMockStore) Create(originalURL, code string) (*store.URL, error) {
+	m.createCalls++
+	if m.failOnce && m.createCalls == 1 {
+		return nil, errors.New("UNIQUE constraint failed: urls.code")
+	}
+	return &store.URL{
+		Code:        code,
+		OriginalURL: originalURL,
+	}, nil
+}
+
+func (m *collisionMockStore) GetByCode(code string) (*store.URL, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *collisionMockStore) Ping() error {
+	return nil
+}
+
 func newTestHandler(t *testing.T) (*Handler, *httptest.Server) {
 	t.Helper()
 	s, err := store.New(":memory:")
@@ -212,6 +236,29 @@ func TestShortenValidHTTPURL(t *testing.T) {
 
 	if resp.StatusCode != http.StatusCreated {
 		t.Errorf("expected 201, got %d", resp.StatusCode)
+	}
+}
+
+func TestShortenRetriesOnCollision(t *testing.T) {
+	mock := &collisionMockStore{failOnce: true}
+	h := New(mock)
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /shorten", h.Shorten)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	body := `{"url":"https://example.com"}`
+	resp, err := http.Post(ts.URL+"/shorten", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		t.Errorf("expected 201, got %d", resp.StatusCode)
+	}
+	if mock.createCalls != 2 {
+		t.Errorf("expected 2 create calls (1 fail + 1 success), got %d", mock.createCalls)
 	}
 }
 
