@@ -55,6 +55,16 @@ func loadConfig() (config, error) {
 	}, nil
 }
 
+func newServer(cfg config, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:         cfg.addr,
+		Handler:      handler,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+}
+
 func main() {
 	cfg, err := loadConfig()
 	if err != nil {
@@ -74,10 +84,7 @@ func main() {
 	mux.Handle("POST /shorten", auth.Middleware(cfg.token, http.HandlerFunc(h.Shorten)))
 	mux.HandleFunc("GET /{code}", h.Resolve)
 
-	srv := &http.Server{
-		Addr:    cfg.addr,
-		Handler: mux,
-	}
+	srv := newServer(cfg, mux)
 
 	go func() {
 		sigCh := make(chan os.Signal, 1)

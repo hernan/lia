@@ -1,9 +1,28 @@
 package main
 
 import (
+	"net/http"
 	"testing"
 	"time"
 )
+
+func TestNewServerTimeouts(t *testing.T) {
+	cfg := config{addr: ":9999"}
+	srv := newServer(cfg, http.NewServeMux())
+
+	if srv.ReadTimeout != 5*time.Second {
+		t.Errorf("expected ReadTimeout 5s, got %v", srv.ReadTimeout)
+	}
+	if srv.WriteTimeout != 10*time.Second {
+		t.Errorf("expected WriteTimeout 10s, got %v", srv.WriteTimeout)
+	}
+	if srv.IdleTimeout != 120*time.Second {
+		t.Errorf("expected IdleTimeout 120s, got %v", srv.IdleTimeout)
+	}
+	if srv.Addr != ":9999" {
+		t.Errorf("expected Addr :9999, got %s", srv.Addr)
+	}
+}
 
 func TestLoadConfigDefaults(t *testing.T) {
 	t.Setenv("SHORTENER_TOKEN", "mytoken")
