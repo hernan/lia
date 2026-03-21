@@ -5,7 +5,7 @@ import (
 )
 
 func TestGenerateLength(t *testing.T) {
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		code := Generate()
 		if len(code) != Length {
 			t.Errorf("expected length %d, got %d for code %q", Length, len(code), code)
@@ -14,7 +14,7 @@ func TestGenerateLength(t *testing.T) {
 }
 
 func TestGenerateCharset(t *testing.T) {
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		code := Generate()
 		for _, c := range code {
 			if !contains(Charset, c) {
