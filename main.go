@@ -93,7 +93,9 @@ func main() {
 		log.Println("shutting down...")
 		ctx, cancel := context.WithTimeout(context.Background(), cfg.shutdownTimeout)
 		defer cancel()
-		srv.Shutdown(ctx)
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Printf("shutdown error: %v", err)
+		}
 	}()
 
 	log.Printf("listening on %s", cfg.addr)
