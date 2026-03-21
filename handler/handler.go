@@ -11,11 +11,17 @@ import (
 	"urlshortener/store"
 )
 
-type Handler struct {
-	store *store.Store
+type URLStore interface {
+	Create(originalURL, code string) (*store.URL, error)
+	GetByCode(code string) (*store.URL, error)
+	Ping() error
 }
 
-func New(s *store.Store) *Handler {
+type Handler struct {
+	store URLStore
+}
+
+func New(s URLStore) *Handler {
 	return &Handler{store: s}
 }
 
@@ -68,6 +74,10 @@ func (h *Handler) Resolve(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
+	if err := h.store.Ping(); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "unhealthy"})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 

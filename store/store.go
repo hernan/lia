@@ -70,6 +70,10 @@ func (s *Store) GetByCode(code string) (*URL, error) {
 	return &u, nil
 }
 
+func (s *Store) Ping() error {
+	return s.db.Ping()
+}
+
 func (s *Store) Close() error {
 	return s.db.Close()
 }

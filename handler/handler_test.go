@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,6 +10,22 @@ import (
 
 	"urlshortener/store"
 )
+
+type mockStore struct {
+	pingErr error
+}
+
+func (m *mockStore) Create(originalURL, code string) (*store.URL, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockStore) GetByCode(code string) (*store.URL, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockStore) Ping() error {
+	return m.pingErr
+}
 
 func newTestHandler(t *testing.T) (*Handler, *httptest.Server) {
 	t.Helper()
@@ -39,6 +56,24 @@ func TestHealth(t *testing.T) {
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestHealthUnhealthy(t *testing.T) {
+	h := &Handler{store: &mockStore{pingErr: errors.New("db down")}}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", h.Health)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("expected 503, got %d", resp.StatusCode)
 	}
 }
 
