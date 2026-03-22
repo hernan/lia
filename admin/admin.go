@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"bytes"
 	"crypto/subtle"
 	"embed"
 	"errors"
@@ -104,6 +105,20 @@ func (a *Admin) setCSRF(w http.ResponseWriter) (string, error) {
 	return token, nil
 }
 
+// render executes a named template into a buffer and, on success, writes it to
+// w with Content-Type text/html. If execution fails the error is logged and a
+// 500 response is sent instead, avoiding a partial/committed response.
+func (a *Admin) render(w http.ResponseWriter, name string, data any) {
+	var buf bytes.Buffer
+	if err := a.tmpls.ExecuteTemplate(&buf, name, data); err != nil {
+		log.Printf("admin: render template %q: %v", name, err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	buf.WriteTo(w)
+}
+
 type loginData struct {
 	Error     string
 	CSRFToken string
@@ -117,7 +132,7 @@ func (a *Admin) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodGet {
-		a.tmpls.ExecuteTemplate(w, "login.html", loginData{CSRFToken: csrfToken})
+		a.render(w, "login.html", loginData{CSRFToken: csrfToken})
 		return
 	}
 
@@ -133,7 +148,7 @@ func (a *Admin) Login(w http.ResponseWriter, r *http.Request) {
 	passwordOK := subtle.ConstantTimeCompare([]byte(password), []byte(a.password)) == 1
 
 	if !usernameOK || !passwordOK {
-		a.tmpls.ExecuteTemplate(w, "login.html", loginData{
+		a.render(w, "login.html", loginData{
 			Error:     "Invalid credentials",
 			CSRFToken: csrfToken,
 		})
@@ -180,7 +195,7 @@ func (a *Admin) Dashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.tmpls.ExecuteTemplate(w, "dashboard.html", dashboardData{
+	a.render(w, "dashboard.html", dashboardData{
 		URLs:       urls,
 		Query:      query,
 		Flash:      flash,
@@ -249,7 +264,7 @@ func (a *Admin) EditURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.tmpls.ExecuteTemplate(w, "edit.html", editData{
+	a.render(w, "edit.html", editData{
 		URL:       u,
 		CSRFToken: csrfToken,
 	})
@@ -292,7 +307,7 @@ func (a *Admin) renderEditError(w http.ResponseWriter, r *http.Request, id int64
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	a.tmpls.ExecuteTemplate(w, "edit.html", editData{
+	a.render(w, "edit.html", editData{
 		URL:       u,
 		Error:     msg,
 		CSRFToken: csrfToken,

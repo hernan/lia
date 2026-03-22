@@ -2,6 +2,7 @@ package admin
 
 import (
 	"errors"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -750,6 +751,71 @@ func TestCreateURLConflictExhausted(t *testing.T) {
 	if len(s.urls) != 0 {
 		t.Errorf("expected 0 URLs after exhausted retries, got %d", len(s.urls))
 	}
+}
+
+func TestRenderTemplateError(t *testing.T) {
+	s := &mockStore{
+		urls: []*store.URL{
+			{ID: 1, Code: "abc123", OriginalURL: "https://example.com"},
+		},
+	}
+	a, sm := newTestAdmin(t, s)
+
+	// Build a replacement template set where every named template always
+	// returns an error during execution. The fail func is registered on the
+	// root and inherited by every associated template.
+	failFn := template.FuncMap{
+		"fail": func() (string, error) { return "", errors.New("injected template error") },
+	}
+	broken := template.Must(
+		template.New("dashboard.html").Funcs(failFn).Parse(`{{fail}}`),
+	)
+	template.Must(broken.New("login.html").Parse(`{{fail}}`))
+	template.Must(broken.New("edit.html").Parse(`{{fail}}`))
+	a.tmpls = broken
+
+	mux := http.NewServeMux()
+	a.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	t.Run("dashboard returns 500", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", srv.URL+"/admin", nil)
+		req.AddCookie(loginSession(t, sm))
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.StatusCode != http.StatusInternalServerError {
+			t.Errorf("expected 500 on template error, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("login GET returns 500", func(t *testing.T) {
+		resp, err := http.Get(srv.URL + "/admin/login")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.StatusCode != http.StatusInternalServerError {
+			t.Errorf("expected 500 on template error, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("edit returns 500", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", srv.URL+"/admin/urls/1/edit", nil)
+		req.AddCookie(loginSession(t, sm))
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.StatusCode != http.StatusInternalServerError {
+			t.Errorf("expected 500 on template error, got %d", resp.StatusCode)
+		}
+	})
 }
 
 func TestLogoutRequiresCSRF(t *testing.T) {
