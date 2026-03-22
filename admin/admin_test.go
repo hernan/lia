@@ -672,3 +672,29 @@ func TestLogout(t *testing.T) {
 	}
 	_ = sm
 }
+
+func TestLogoutRequiresCSRF(t *testing.T) {
+	s := &mockStore{}
+	a, sm := newTestAdmin(t, s)
+
+	mux := http.NewServeMux()
+	a.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	// POST logout with a valid session but no CSRF token/cookie.
+	req, _ := http.NewRequest("POST", srv.URL+"/admin/logout", nil)
+	req.AddCookie(loginSession(t, sm))
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403 without CSRF token, got %d", resp.StatusCode)
+	}
+}

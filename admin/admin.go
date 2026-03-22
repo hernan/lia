@@ -65,7 +65,7 @@ func validURL(s string) bool {
 func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/login", a.Login)
 	mux.HandleFunc("POST /admin/login", a.Login)
-	mux.Handle("POST /admin/logout", a.requireAuth(http.HandlerFunc(a.Logout)))
+	mux.Handle("POST /admin/logout", a.requireAuth(a.requireCSRF(http.HandlerFunc(a.Logout))))
 	mux.Handle("GET /admin", a.requireAuth(http.HandlerFunc(a.Dashboard)))
 	mux.Handle("POST /admin", a.requireAuth(a.requireCSRF(http.HandlerFunc(a.CreateURL))))
 	mux.Handle("GET /admin/urls/{id}/edit", a.requireAuth(http.HandlerFunc(a.EditURL)))
