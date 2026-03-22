@@ -2,10 +2,16 @@ package store
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
 	"time"
 
+	"github.com/mattn/go-sqlite3"
 	_ "github.com/mattn/go-sqlite3"
 )
+
+// ErrConflict is returned by Create when the code already exists in the store.
+var ErrConflict = errors.New("code already exists")
 
 type URL struct {
 	ID          int64
@@ -24,6 +30,10 @@ func New(dbPath string) (*Store, error) {
 		return nil, err
 	}
 
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(5 * time.Minute)
+
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS urls (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,19 +47,19 @@ func New(dbPath string) (*Store, error) {
 		return nil, err
 	}
 
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-	db.SetConnMaxLifetime(5 * time.Minute)
-
 	return &Store{db: db}, nil
 }
 
 func (s *Store) Create(originalURL, code string) (*URL, error) {
+	now := time.Now().UTC().Truncate(time.Second)
 	result, err := s.db.Exec(
-		"INSERT INTO urls (code, original_url) VALUES (?, ?)",
-		code, originalURL,
+		"INSERT INTO urls (code, original_url, created_at) VALUES (?, ?, ?)",
+		code, originalURL, now,
 	)
 	if err != nil {
+		if isConstraintError(err) {
+			return nil, fmt.Errorf("%w", ErrConflict)
+		}
 		return nil, err
 	}
 
@@ -61,7 +71,7 @@ func (s *Store) Create(originalURL, code string) (*URL, error) {
 		ID:          id,
 		Code:        code,
 		OriginalURL: originalURL,
-		CreatedAt:   time.Now().UTC(),
+		CreatedAt:   now,
 	}, nil
 }
 
@@ -83,4 +93,12 @@ func (s *Store) Ping() error {
 
 func (s *Store) Close() error {
 	return s.db.Close()
+}
+
+func isConstraintError(err error) bool {
+	var sqliteErr sqlite3.Error
+	if errors.As(err, &sqliteErr) {
+		return sqliteErr.Code == sqlite3.ErrConstraint
+	}
+	return false
 }

@@ -1,8 +1,8 @@
 package store
 
 import (
+	"errors"
 	"testing"
-	"time"
 )
 
 func newTestStore(t *testing.T) *Store {
@@ -54,28 +54,18 @@ func TestGetByCodeNotFound(t *testing.T) {
 func TestCreateCreatedAtMatchesDB(t *testing.T) {
 	s := newTestStore(t)
 
-	before := time.Now().UTC()
 	created, err := s.Create("https://example.com", "time1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	after := time.Now().UTC()
 
 	fetched, err := s.GetByCode("time1")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if created.CreatedAt.Before(before) || created.CreatedAt.After(after) {
-		t.Errorf("returned CreatedAt %v not between %v and %v", created.CreatedAt, before, after)
-	}
-
-	diff := created.CreatedAt.Sub(fetched.CreatedAt)
-	if diff < 0 {
-		diff = -diff
-	}
-	if diff > time.Second {
-		t.Errorf("returned CreatedAt %v differs from DB CreatedAt %v by %v", created.CreatedAt, fetched.CreatedAt, diff)
+	if !created.CreatedAt.Equal(fetched.CreatedAt) {
+		t.Errorf("returned CreatedAt %v does not match DB CreatedAt %v", created.CreatedAt, fetched.CreatedAt)
 	}
 }
 
@@ -110,5 +100,39 @@ func TestCreateDuplicateCode(t *testing.T) {
 	_, err = s.Create("https://other.com", "abc123")
 	if err == nil {
 		t.Fatal("expected error for duplicate code")
+	}
+}
+
+func TestCreateDuplicateCodeReturnsErrConflict(t *testing.T) {
+	s := newTestStore(t)
+
+	_, err := s.Create("https://example.com", "abc123")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = s.Create("https://other.com", "abc123")
+	if !errors.Is(err, ErrConflict) {
+		t.Errorf("expected ErrConflict, got %v", err)
+	}
+}
+
+func TestPingHealthy(t *testing.T) {
+	s := newTestStore(t)
+
+	if err := s.Ping(); err != nil {
+		t.Errorf("expected nil error from Ping on open store, got %v", err)
+	}
+}
+
+func TestPingAfterClose(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+
+	if err := s.Ping(); err == nil {
+		t.Error("expected non-nil error from Ping on closed store")
 	}
 }

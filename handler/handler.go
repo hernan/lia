@@ -8,8 +8,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/mattn/go-sqlite3"
-
 	"urlshortener/shortener"
 	"urlshortener/store"
 )
@@ -62,7 +60,7 @@ func (h *Handler) Shorten(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			break
 		}
-		if !isConstraintError(err) {
+		if !errors.Is(err, store.ErrConflict) {
 			writeError(w, http.StatusInternalServerError, "failed to create short URL")
 			return
 		}
@@ -114,12 +112,4 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
-}
-
-func isConstraintError(err error) bool {
-	var sqliteErr sqlite3.Error
-	if errors.As(err, &sqliteErr) {
-		return sqliteErr.Code == sqlite3.ErrConstraint
-	}
-	return false
 }
