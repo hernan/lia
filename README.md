@@ -74,3 +74,83 @@ curl -L localhost:8080/<code>
 ```bash
 CGO_ENABLED=1 go test ./...
 ```
+
+## Adding a New Database Driver
+
+Adding a new driver (e.g. Postgres) requires changes in four files plus
+a new package. Using `postgres` as an example:
+
+### 1. Create the driver package
+
+```
+store/postgres/postgres.go
+store/postgres/migrations/001_init.sql
+```
+
+`store/postgres/postgres.go` must export:
+
+```go
+// New opens a Postgres database and returns the connection.
+func New(dsn string) (*sql.DB, error) { ... }
+
+// IsConstraintError reports whether err is a Postgres constraint violation.
+func IsConstraintError(err error) bool { ... }
+```
+
+`New` should configure connection pool settings appropriate for the driver.
+`IsConstraintError` should check the driver-specific error type (e.g.
+`pgconn.PgError` with code `23505` for Postgres unique violations).
+
+The `migrations/001_init.sql` file contains the initial schema using
+the driver's SQL dialect.
+
+### 2. Register migrations in `store/migrate.go`
+
+Add an embed directive and two case branches:
+
+```go
+//go:embed all:postgres/migrations
+var postgresMigrations embed.FS
+```
+
+In `migrationFiles`:
+
+```go
+case "postgres":
+    fs = postgresMigrations
+```
+
+In `readMigration`:
+
+```go
+case "postgres":
+    fs = postgresMigrations
+```
+
+### 3. Register the driver in `store/open.go`
+
+Import the new package:
+
+```go
+"urlshortener/store/postgres"
+```
+
+In `Open`:
+
+```go
+case "postgres":
+    db, err = postgres.New(dsn)
+```
+
+In `isConstraintError`:
+
+```go
+case "postgres":
+    return postgres.IsConstraintError(err)
+```
+
+### 4. Use it
+
+```bash
+DB_DRIVER=postgres DB_DSN="postgres://user:pass@localhost:5432/shortener" go run .
+```
