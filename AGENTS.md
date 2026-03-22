@@ -71,7 +71,7 @@ import (
 
 Use the standard `if err != nil` pattern. Return errors up the call stack;
 do not log in library packages. In `main.go`, use `log.Fatal` for startup
-errors. HTTP handlers write errors as JSON via `writeJSON`.
+errors. HTTP handlers write errors as JSON via `httputil.WriteError`.
 
 ```go
 if err != nil {
@@ -81,25 +81,29 @@ if err != nil {
 
 ### JSON responses
 
-A `writeJSON` helper in the handler package encodes responses:
+Shared helpers in `internal/httputil` encode responses:
 
 ```go
-writeJSON(w, http.StatusCreated, map[string]interface{}{
+httputil.WriteJSON(w, http.StatusCreated, map[string]interface{}{
 	"code": created.Code,
 	"url":  created.OriginalURL,
 })
 ```
 
-A `writeError` helper wraps the common error pattern:
+`httputil.WriteError` wraps the common error pattern:
 
 ```go
-writeError(w, http.StatusBadRequest, "url is required")
+httputil.WriteError(w, http.StatusBadRequest, "url is required")
 ```
 
 ### Structs
 
 Keep fields unexported. Use constructors (`New`) to build instances rather
 than exporting struct fields.
+
+> **Exception:** pure data-transfer types that carry no behaviour (e.g.
+> `store.URL`) may use exported fields. The "unexported fields + constructor"
+> rule applies to types that own significant logic or internal state.
 
 ## Testing conventions
 
