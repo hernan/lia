@@ -2,52 +2,39 @@ package store
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"time"
 
-	"github.com/mattn/go-sqlite3"
-	_ "github.com/mattn/go-sqlite3"
+	"urlshortener/store/sqlite"
 )
 
-// ErrConflict is returned by Create when the code already exists in the store.
-var ErrConflict = errors.New("code already exists")
-
-type URL struct {
-	ID          int64
-	Code        string
-	OriginalURL string
-	CreatedAt   time.Time
-}
-
+// Store is the concrete storage implementation backed by a SQL database.
 type Store struct {
-	db *sql.DB
+	db     *sql.DB
+	driver string
 }
 
-func New(dbPath string) (*Store, error) {
-	db, err := sql.Open("sqlite3", dbPath)
+// Open connects to the given driver, runs migrations, and returns a *Store.
+func Open(driver, dsn string) (*Store, error) {
+	var db *sql.DB
+	var err error
+
+	switch driver {
+	case "sqlite":
+		db, err = sqlite.New(dsn)
+	default:
+		return nil, fmt.Errorf("unsupported driver: %s", driver)
+	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open %s: %w", driver, err)
 	}
 
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-	db.SetConnMaxLifetime(5 * time.Minute)
-
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS urls (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			code TEXT NOT NULL UNIQUE,
-			original_url TEXT NOT NULL,
-			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)
-	`)
-	if err != nil {
+	if err := Migrate(db, driver); err != nil {
 		db.Close()
-		return nil, err
+		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
-	return &Store{db: db}, nil
+	return &Store{db: db, driver: driver}, nil
 }
 
 func (s *Store) Create(originalURL, code string) (*URL, error) {
@@ -57,7 +44,7 @@ func (s *Store) Create(originalURL, code string) (*URL, error) {
 		code, originalURL, now,
 	)
 	if err != nil {
-		if isConstraintError(err) {
+		if s.isConstraintError(err) {
 			return nil, fmt.Errorf("%w", ErrConflict)
 		}
 		return nil, err
@@ -95,10 +82,11 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
-func isConstraintError(err error) bool {
-	var sqliteErr sqlite3.Error
-	if errors.As(err, &sqliteErr) {
-		return sqliteErr.Code == sqlite3.ErrConstraint
+func (s *Store) isConstraintError(err error) bool {
+	switch s.driver {
+	case "sqlite":
+		return sqlite.IsConstraintError(err)
+	default:
+		return false
 	}
-	return false
 }
