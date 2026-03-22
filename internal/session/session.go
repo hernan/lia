@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -107,14 +108,18 @@ func TokenFromRequest(r *http.Request) string {
 	return c.Value
 }
 
-// VerifyCSRF compares the form value "csrf_token" against the cookie.
+// VerifyCSRF compares the form value "csrf_token" against the cookie using
+// constant-time comparison to prevent timing attacks.
 func VerifyCSRF(r *http.Request) bool {
 	cookieToken := TokenFromRequest(r)
 	if cookieToken == "" {
 		return false
 	}
 	formToken := r.FormValue("csrf_token")
-	return formToken != "" && cookieToken == formToken
+	if formToken == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(cookieToken), []byte(formToken)) == 1
 }
 
 func (m *Manager) sign(username string) string {

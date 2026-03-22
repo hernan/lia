@@ -181,3 +181,30 @@ func TestVerifyCSRFFailsMissingForm(t *testing.T) {
 		t.Error("expected CSRF verification to fail without form token")
 	}
 }
+
+func TestVerifyCSRFConstantTimeEqual(t *testing.T) {
+	token := "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+	form := url.Values{}
+	form.Set("csrf_token", token)
+
+	r := httptest.NewRequest("POST", "/admin", strings.NewReader(form.Encode()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.AddCookie(&http.Cookie{Name: "csrf_token", Value: token})
+
+	if !VerifyCSRF(r) {
+		t.Error("expected VerifyCSRF to return true for matching tokens")
+	}
+}
+
+func TestVerifyCSRFConstantTimeNotEqual(t *testing.T) {
+	form := url.Values{}
+	form.Set("csrf_token", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+
+	r := httptest.NewRequest("POST", "/admin", strings.NewReader(form.Encode()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.AddCookie(&http.Cookie{Name: "csrf_token", Value: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"})
+
+	if VerifyCSRF(r) {
+		t.Error("expected VerifyCSRF to return false for mismatched tokens")
+	}
+}
