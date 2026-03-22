@@ -88,7 +88,7 @@ func TestHealthUnhealthy(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", h.Health)
 	ts := httptest.NewServer(mux)
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 
 	resp, err := http.Get(ts.URL + "/health")
 	if err != nil {
