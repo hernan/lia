@@ -5,12 +5,19 @@ A simple URL shortener API built with Go, using SQLite for storage.
 ## Project Structure
 
 ```
-├── main.go                  # Server + routing + graceful shutdown
-├── main_test.go             # Config loading tests
-├── store/store.go           # SQLite CRUD (Create, GetByCode)
-├── shortener/shortener.go   # Random 6-char code generator
-├── auth/auth.go             # Bearer token middleware
-└── handler/handler.go       # HTTP handlers (Shorten, Resolve, Health)
+├── main.go                        # Server + routing + graceful shutdown
+├── main_test.go                   # Config loading tests
+├── store/
+│   ├── types.go                   # URL, ErrConflict, URLStore interface
+│   ├── open.go                    # Store concrete type + Open() factory
+│   ├── migrate.go                 # Embedded migration runner
+│   └── sqlite/
+│       ├── sqlite.go              # SQLite connection + IsConstraintError
+│       └── migrations/
+│           └── 001_init.sql       # Initial schema
+├── shortener/shortener.go         # Random 6-char code generator
+├── auth/auth.go                   # Bearer token middleware
+└── handler/handler.go             # HTTP handlers
 ```
 
 ## Endpoints
@@ -34,14 +41,15 @@ SHORTENER_TOKEN=mysecret go run .
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `SHORTENER_TOKEN` | Yes | — | Bearer token for the `/shorten` endpoint |
-| `DB_PATH` | No | `shortener.db` | Path to SQLite database file |
+| `DB_DRIVER` | No | `sqlite` | Database driver (`sqlite`) |
+| `DB_DSN` | No | `shortener.db` | Data source name (`:memory:`, `shortener.db`, `postgres://...`) |
 | `PORT` | No | `8080` | Server listen port |
 | `SHUTDOWN_TIMEOUT` | No | `5s` | Graceful shutdown timeout (Go duration) |
 
 Example with custom config:
 
 ```bash
-SHORTENER_TOKEN=mysecret DB_PATH=data.db PORT=9090 SHUTDOWN_TIMEOUT=10s go run .
+SHORTENER_TOKEN=mysecret DB_DSN=:memory: PORT=9090 SHUTDOWN_TIMEOUT=10s go run .
 ```
 
 ## Usage

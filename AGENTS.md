@@ -2,16 +2,25 @@
 
 ## Project overview
 
-A Go URL shortener API using SQLite. The module is `urlshortener` (Go 1.26.1).
-The only external dependency is `github.com/mattn/go-sqlite3`.
+A Go URL shortener API with pluggable database backends. The module is
+`urlshortener` (Go 1.26.1). Currently supports SQLite; adding a new driver
+requires implementing the `store.URLStore` interface and adding a migration
+file.
 
 ```
-├── main.go                  # Entry point, routing, graceful shutdown
-├── main_test.go             # Config loading tests
-├── store/store.go           # SQLite CRUD operations
-├── shortener/shortener.go   # Random 6-char code generator
-├── auth/auth.go             # Bearer token middleware
-└── handler/handler.go       # HTTP handlers
+├── main.go                        # Entry point, routing, graceful shutdown
+├── main_test.go                   # Config loading tests
+├── store/
+│   ├── types.go                   # URL, ErrConflict, URLStore interface
+│   ├── open.go                    # Store concrete type + Open() factory
+│   ├── migrate.go                 # Embedded migration runner
+│   └── sqlite/
+│       ├── sqlite.go              # SQLite connection + IsConstraintError
+│       └── migrations/
+│           └── 001_init.sql       # Initial schema
+├── shortener/shortener.go         # Random 6-char code generator
+├── auth/auth.go                   # Bearer token middleware
+└── handler/handler.go             # HTTP handlers (defines URLStore interface)
 ```
 
 ## Build and test commands
@@ -37,7 +46,8 @@ All configuration is via environment variables:
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `SHORTENER_TOKEN` | Yes | — | Bearer token for the `/shorten` endpoint |
-| `DB_PATH` | No | `shortener.db` | Path to SQLite database file |
+| `DB_DRIVER` | No | `sqlite` | Database driver (`sqlite`) |
+| `DB_DSN` | No | `shortener.db` | Data source name (`:memory:`, `shortener.db`, `postgres://...`) |
 | `PORT` | No | `8080` | Server listen port |
 | `SHUTDOWN_TIMEOUT` | No | `5s` | Graceful shutdown timeout (Go duration) |
 
@@ -112,7 +122,7 @@ than exporting struct fields.
   `TestHealthUnhealthy`).
 - Use `t.Helper()` in test helper functions.
 - Use `t.Cleanup()` for resource cleanup instead of `defer`.
-- For database tests, use in-memory SQLite: `store.New(":memory:")`.
+- For database tests, use in-memory SQLite: `store.Open("sqlite", ":memory:")`.
 - For HTTP tests, use `net/http/httptest` (`NewServer`, `NewRecorder`).
 - For dependency injection in tests, define interfaces in the consumer
   package and provide mock implementations in the `_test.go` file.
