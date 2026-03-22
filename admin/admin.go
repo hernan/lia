@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -49,6 +50,14 @@ func New(s URLStore, sm *session.Manager, username, password string) (*Admin, er
 		username: username,
 		password: password,
 	}, nil
+}
+
+func validURL(s string) bool {
+	parsed, err := url.Parse(s)
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return false
+	}
+	return true
 }
 
 // RegisterRoutes registers admin routes on the given mux.
@@ -140,10 +149,11 @@ func (a *Admin) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 type dashboardData struct {
-	URLs      []*store.URL
-	Query     string
-	Flash     string
-	CSRFToken string
+	URLs       []*store.URL
+	Query      string
+	Flash      string
+	FlashError bool
+	CSRFToken  string
 }
 
 func (a *Admin) Dashboard(w http.ResponseWriter, r *http.Request) {
@@ -155,6 +165,7 @@ func (a *Admin) Dashboard(w http.ResponseWriter, r *http.Request) {
 
 	query := r.URL.Query().Get("q")
 	flash := r.URL.Query().Get("flash")
+	flashError := r.URL.Query().Get("flash_error") == "1"
 
 	var urls []*store.URL
 	if query != "" {
@@ -169,17 +180,22 @@ func (a *Admin) Dashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.tmpls.ExecuteTemplate(w, "dashboard.html", dashboardData{
-		URLs:      urls,
-		Query:     query,
-		Flash:     flash,
-		CSRFToken: csrfToken,
+		URLs:       urls,
+		Query:      query,
+		Flash:      flash,
+		FlashError: flashError,
+		CSRFToken:  csrfToken,
 	})
 }
 
 func (a *Admin) CreateURL(w http.ResponseWriter, r *http.Request) {
 	originalURL := strings.TrimSpace(r.FormValue("url"))
 	if originalURL == "" {
-		http.Error(w, "url is required", http.StatusBadRequest)
+		http.Redirect(w, r, "/admin?flash=url+is+required&flash_error=1", http.StatusSeeOther)
+		return
+	}
+	if !validURL(originalURL) {
+		http.Redirect(w, r, "/admin?flash=invalid+url&flash_error=1", http.StatusSeeOther)
 		return
 	}
 
@@ -247,7 +263,11 @@ func (a *Admin) UpdateURL(w http.ResponseWriter, r *http.Request) {
 
 	originalURL := strings.TrimSpace(r.FormValue("url"))
 	if originalURL == "" {
-		http.Error(w, "url is required", http.StatusBadRequest)
+		a.renderEditError(w, r, id, "url is required")
+		return
+	}
+	if !validURL(originalURL) {
+		a.renderEditError(w, r, id, "invalid url")
 		return
 	}
 
@@ -258,6 +278,24 @@ func (a *Admin) UpdateURL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/admin?flash=URL+updated", http.StatusSeeOther)
+}
+
+func (a *Admin) renderEditError(w http.ResponseWriter, r *http.Request, id int64, msg string) {
+	csrfToken, err := a.setCSRF(w)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	u, err := a.store.GetByID(id)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	a.tmpls.ExecuteTemplate(w, "edit.html", editData{
+		URL:       u,
+		Error:     msg,
+		CSRFToken: csrfToken,
+	})
 }
 
 func (a *Admin) DeleteURL(w http.ResponseWriter, r *http.Request) {

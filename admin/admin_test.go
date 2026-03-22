@@ -353,6 +353,109 @@ func TestCreateURLRequiresCSRF(t *testing.T) {
 	}
 }
 
+func TestCreateURLInvalidURL(t *testing.T) {
+	s := &mockStore{}
+	a, sm := newTestAdmin(t, s)
+
+	mux := http.NewServeMux()
+	a.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	csrfCookie, form := csrfCookieAndForm()
+	form.Set("url", "not a url")
+
+	req, _ := http.NewRequest("POST", srv.URL+"/admin", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(loginSession(t, sm))
+	req.AddCookie(csrfCookie)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("expected 303, got %d", resp.StatusCode)
+	}
+	if len(s.urls) != 0 {
+		t.Errorf("expected 0 URLs in store, got %d", len(s.urls))
+	}
+	loc := resp.Header.Get("Location")
+	if !strings.Contains(loc, "flash_error=1") {
+		t.Errorf("expected redirect with flash_error, got %s", loc)
+	}
+}
+
+func TestCreateURLMissingScheme(t *testing.T) {
+	s := &mockStore{}
+	a, sm := newTestAdmin(t, s)
+
+	mux := http.NewServeMux()
+	a.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	csrfCookie, form := csrfCookieAndForm()
+	form.Set("url", "example.com")
+
+	req, _ := http.NewRequest("POST", srv.URL+"/admin", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(loginSession(t, sm))
+	req.AddCookie(csrfCookie)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("expected 303, got %d", resp.StatusCode)
+	}
+	if len(s.urls) != 0 {
+		t.Errorf("expected 0 URLs in store, got %d", len(s.urls))
+	}
+}
+
+func TestCreateURLDangerousScheme(t *testing.T) {
+	s := &mockStore{}
+	a, sm := newTestAdmin(t, s)
+
+	mux := http.NewServeMux()
+	a.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	csrfCookie, form := csrfCookieAndForm()
+	form.Set("url", "javascript:alert(1)")
+
+	req, _ := http.NewRequest("POST", srv.URL+"/admin", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(loginSession(t, sm))
+	req.AddCookie(csrfCookie)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("expected 303, got %d", resp.StatusCode)
+	}
+	if len(s.urls) != 0 {
+		t.Errorf("expected 0 URLs in store, got %d", len(s.urls))
+	}
+}
+
 func TestEditURL(t *testing.T) {
 	s := &mockStore{
 		urls: []*store.URL{
@@ -416,6 +519,80 @@ func TestUpdateURL(t *testing.T) {
 	}
 	if s.urls[0].OriginalURL != "https://new.com" {
 		t.Errorf("expected URL updated to https://new.com, got %s", s.urls[0].OriginalURL)
+	}
+}
+
+func TestUpdateURLInvalidURL(t *testing.T) {
+	s := &mockStore{
+		urls: []*store.URL{
+			{ID: 1, Code: "abc123", OriginalURL: "https://old.com"},
+		},
+	}
+	a, sm := newTestAdmin(t, s)
+
+	mux := http.NewServeMux()
+	a.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	csrfCookie, form := csrfCookieAndForm()
+	form.Set("url", "not a url")
+
+	req, _ := http.NewRequest("POST", srv.URL+"/admin/urls/1/edit", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(loginSession(t, sm))
+	req.AddCookie(csrfCookie)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	if s.urls[0].OriginalURL != "https://old.com" {
+		t.Errorf("expected URL unchanged, got %s", s.urls[0].OriginalURL)
+	}
+}
+
+func TestUpdateURLMissingScheme(t *testing.T) {
+	s := &mockStore{
+		urls: []*store.URL{
+			{ID: 1, Code: "abc123", OriginalURL: "https://old.com"},
+		},
+	}
+	a, sm := newTestAdmin(t, s)
+
+	mux := http.NewServeMux()
+	a.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	csrfCookie, form := csrfCookieAndForm()
+	form.Set("url", "example.com")
+
+	req, _ := http.NewRequest("POST", srv.URL+"/admin/urls/1/edit", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(loginSession(t, sm))
+	req.AddCookie(csrfCookie)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	if s.urls[0].OriginalURL != "https://old.com" {
+		t.Errorf("expected URL unchanged, got %s", s.urls[0].OriginalURL)
 	}
 }
 
