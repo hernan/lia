@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"net/http"
 	"testing"
 	"time"
@@ -98,5 +100,34 @@ func TestLoadConfigInvalidTimeout(t *testing.T) {
 	_, err := loadConfig()
 	if err == nil {
 		t.Fatal("expected error for invalid timeout")
+	}
+}
+
+func TestLoadConfigAdminSessionSecret(t *testing.T) {
+	t.Setenv("SHORTENER_TOKEN", "mytoken")
+	t.Setenv("ADMIN_SESSION_SECRET", "supersecretkey")
+
+	cfg, err := loadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(cfg.adminSessionSecret, []byte("supersecretkey")) {
+		t.Errorf("expected adminSessionSecret %q, got %q", "supersecretkey", cfg.adminSessionSecret)
+	}
+}
+
+func TestLoadConfigAdminSessionSecretFallback(t *testing.T) {
+	t.Setenv("SHORTENER_TOKEN", "mytoken")
+	t.Setenv("ADMIN_SESSION_SECRET", "")
+
+	cfg, err := loadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	derived := sha256.Sum256([]byte("mytoken"))
+	if !bytes.Equal(cfg.adminSessionSecret, derived[:]) {
+		t.Errorf("expected adminSessionSecret to be sha256 of token, got %x", cfg.adminSessionSecret)
 	}
 }

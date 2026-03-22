@@ -19,13 +19,14 @@ import (
 )
 
 type config struct {
-	token           string
-	dbDriver        string
-	dbDsn           string
-	addr            string
-	shutdownTimeout time.Duration
-	adminUsername   string
-	adminPassword   string
+	token              string
+	dbDriver           string
+	dbDsn              string
+	addr               string
+	shutdownTimeout    time.Duration
+	adminUsername      string
+	adminPassword      string
+	adminSessionSecret []byte
 }
 
 func loadConfig() (config, error) {
@@ -58,14 +59,22 @@ func loadConfig() (config, error) {
 		shutdownTimeout = d
 	}
 
+	adminSessionSecret := []byte(os.Getenv("ADMIN_SESSION_SECRET"))
+	if len(adminSessionSecret) == 0 {
+		log.Println("warning: ADMIN_SESSION_SECRET not set; deriving session key from SHORTENER_TOKEN")
+		derived := sha256.Sum256([]byte(token))
+		adminSessionSecret = derived[:]
+	}
+
 	return config{
-		token:           token,
-		dbDriver:        dbDriver,
-		dbDsn:           dbDsn,
-		addr:            ":" + addr,
-		shutdownTimeout: shutdownTimeout,
-		adminUsername:   os.Getenv("ADMIN_USERNAME"),
-		adminPassword:   os.Getenv("ADMIN_PASSWORD"),
+		token:              token,
+		dbDriver:           dbDriver,
+		dbDsn:              dbDsn,
+		addr:               ":" + addr,
+		shutdownTimeout:    shutdownTimeout,
+		adminUsername:      os.Getenv("ADMIN_USERNAME"),
+		adminPassword:      os.Getenv("ADMIN_PASSWORD"),
+		adminSessionSecret: adminSessionSecret,
 	}, nil
 }
 
@@ -103,8 +112,7 @@ func main() {
 
 	// Admin panel routes (registered before catch-all).
 	if cfg.adminUsername != "" && cfg.adminPassword != "" {
-		secret := sha256.Sum256([]byte(cfg.token))
-		sm := session.New(secret[:])
+		sm := session.New(cfg.adminSessionSecret)
 		ad, err := admin.New(s, sm, cfg.adminUsername, cfg.adminPassword)
 		if err != nil {
 			log.Fatal(err)
