@@ -5,8 +5,9 @@ import (
 )
 
 const (
-	Charset = "abcdefghjkmnpqrstuvwxyz023456789"
-	Length  = 6
+	Charset    = "abcdefghjkmnpqrstuvwxyz023456789"
+	Length     = 6
+	charsetLen = byte(len(Charset))
 )
 
 func Generate() string {
@@ -15,7 +16,7 @@ func Generate() string {
 		panic("crypto/rand failed: " + err.Error())
 	}
 	for i := range b {
-		b[i] = Charset[b[i]%32]
+		b[i] = Charset[b[i]%charsetLen]
 	}
 	return string(b)
 }
