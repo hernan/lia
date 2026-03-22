@@ -215,11 +215,10 @@ func (a *Admin) CreateURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var created *store.URL
 	var err error
 	for range 5 {
 		code := shortener.Generate()
-		created, err = a.store.Create(originalURL, code)
+		_, err = a.store.Create(originalURL, code)
 		if err == nil {
 			break
 		}
@@ -235,7 +234,6 @@ func (a *Admin) CreateURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = created
 	http.Redirect(w, r, "/admin?flash=URL+created", http.StatusSeeOther)
 }
 

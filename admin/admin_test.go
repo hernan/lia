@@ -137,7 +137,7 @@ func TestLoginGet(t *testing.T) {
 
 func TestLoginPostInvalidCredentials(t *testing.T) {
 	s := &mockStore{}
-	a, sm := newTestAdmin(t, s)
+	a, _ := newTestAdmin(t, s)
 
 	mux := http.NewServeMux()
 	a.RegisterRoutes(mux)
@@ -159,7 +159,6 @@ func TestLoginPostInvalidCredentials(t *testing.T) {
 	req, _ := http.NewRequest("POST", srv.URL+"/admin/login", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: csrfToken})
-	_ = sm
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -673,7 +672,6 @@ func TestLogout(t *testing.T) {
 	if !sessionCleared {
 		t.Error("expected session cookie to be cleared")
 	}
-	_ = sm
 }
 
 func TestCreateURLConflictRetries(t *testing.T) {
