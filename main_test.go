@@ -10,14 +10,14 @@ func TestNewServerTimeouts(t *testing.T) {
 	cfg := config{addr: ":9999"}
 	srv := newServer(cfg, http.NewServeMux())
 
-	if srv.ReadTimeout != 5*time.Second {
-		t.Errorf("expected ReadTimeout 5s, got %v", srv.ReadTimeout)
+	if srv.ReadTimeout != defaultReadTimeout {
+		t.Errorf("expected ReadTimeout %v, got %v", defaultReadTimeout, srv.ReadTimeout)
 	}
-	if srv.WriteTimeout != 10*time.Second {
-		t.Errorf("expected WriteTimeout 10s, got %v", srv.WriteTimeout)
+	if srv.WriteTimeout != defaultWriteTimeout {
+		t.Errorf("expected WriteTimeout %v, got %v", defaultWriteTimeout, srv.WriteTimeout)
 	}
-	if srv.IdleTimeout != 120*time.Second {
-		t.Errorf("expected IdleTimeout 120s, got %v", srv.IdleTimeout)
+	if srv.IdleTimeout != defaultIdleTimeout {
+		t.Errorf("expected IdleTimeout %v, got %v", defaultIdleTimeout, srv.IdleTimeout)
 	}
 	if srv.Addr != ":9999" {
 		t.Errorf("expected Addr :9999, got %s", srv.Addr)

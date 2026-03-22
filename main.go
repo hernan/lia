@@ -55,13 +55,19 @@ func loadConfig() (config, error) {
 	}, nil
 }
 
+const (
+	defaultReadTimeout  = 5 * time.Second
+	defaultWriteTimeout = 10 * time.Second
+	defaultIdleTimeout  = 120 * time.Second
+)
+
 func newServer(cfg config, handler http.Handler) *http.Server {
 	return &http.Server{
 		Addr:         cfg.addr,
 		Handler:      handler,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		ReadTimeout:  defaultReadTimeout,
+		WriteTimeout: defaultWriteTimeout,
+		IdleTimeout:  defaultIdleTimeout,
 	}
 }
 
