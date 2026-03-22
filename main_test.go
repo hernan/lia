@@ -26,7 +26,8 @@ func TestNewServerTimeouts(t *testing.T) {
 
 func TestLoadConfigDefaults(t *testing.T) {
 	t.Setenv("SHORTENER_TOKEN", "mytoken")
-	t.Setenv("DB_PATH", "")
+	t.Setenv("DB_DRIVER", "")
+	t.Setenv("DB_DSN", "")
 	t.Setenv("PORT", "")
 	t.Setenv("SHUTDOWN_TIMEOUT", "")
 
@@ -38,8 +39,11 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.token != "mytoken" {
 		t.Errorf("expected token mytoken, got %s", cfg.token)
 	}
-	if cfg.dbPath != "shortener.db" {
-		t.Errorf("expected dbPath shortener.db, got %s", cfg.dbPath)
+	if cfg.dbDriver != "sqlite" {
+		t.Errorf("expected dbDriver sqlite, got %s", cfg.dbDriver)
+	}
+	if cfg.dbDsn != "shortener.db" {
+		t.Errorf("expected dbDsn shortener.db, got %s", cfg.dbDsn)
 	}
 	if cfg.addr != ":8080" {
 		t.Errorf("expected addr :8080, got %s", cfg.addr)
@@ -51,7 +55,8 @@ func TestLoadConfigDefaults(t *testing.T) {
 
 func TestLoadConfigCustom(t *testing.T) {
 	t.Setenv("SHORTENER_TOKEN", "secret")
-	t.Setenv("DB_PATH", "/tmp/test.db")
+	t.Setenv("DB_DRIVER", "sqlite")
+	t.Setenv("DB_DSN", "/tmp/test.db")
 	t.Setenv("PORT", "9090")
 	t.Setenv("SHUTDOWN_TIMEOUT", "10s")
 
@@ -63,8 +68,11 @@ func TestLoadConfigCustom(t *testing.T) {
 	if cfg.token != "secret" {
 		t.Errorf("expected token secret, got %s", cfg.token)
 	}
-	if cfg.dbPath != "/tmp/test.db" {
-		t.Errorf("expected dbPath /tmp/test.db, got %s", cfg.dbPath)
+	if cfg.dbDriver != "sqlite" {
+		t.Errorf("expected dbDriver sqlite, got %s", cfg.dbDriver)
+	}
+	if cfg.dbDsn != "/tmp/test.db" {
+		t.Errorf("expected dbDsn /tmp/test.db, got %s", cfg.dbDsn)
 	}
 	if cfg.addr != ":9090" {
 		t.Errorf("expected addr :9090, got %s", cfg.addr)

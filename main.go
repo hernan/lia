@@ -17,7 +17,8 @@ import (
 
 type config struct {
 	token           string
-	dbPath          string
+	dbDriver        string
+	dbDsn           string
 	addr            string
 	shutdownTimeout time.Duration
 }
@@ -28,9 +29,14 @@ func loadConfig() (config, error) {
 		return config{}, fmt.Errorf("SHORTENER_TOKEN environment variable is required")
 	}
 
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = "shortener.db"
+	dbDriver := os.Getenv("DB_DRIVER")
+	if dbDriver == "" {
+		dbDriver = "sqlite"
+	}
+
+	dbDsn := os.Getenv("DB_DSN")
+	if dbDsn == "" {
+		dbDsn = "shortener.db"
 	}
 
 	addr := os.Getenv("PORT")
@@ -49,7 +55,8 @@ func loadConfig() (config, error) {
 
 	return config{
 		token:           token,
-		dbPath:          dbPath,
+		dbDriver:        dbDriver,
+		dbDsn:           dbDsn,
 		addr:            ":" + addr,
 		shutdownTimeout: shutdownTimeout,
 	}, nil
@@ -77,7 +84,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	s, err := store.New(cfg.dbPath)
+	s, err := store.Open(cfg.dbDriver, cfg.dbDsn)
 	if err != nil {
 		log.Fatal(err)
 	}

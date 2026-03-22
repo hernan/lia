@@ -53,7 +53,7 @@ func (m *collisionMockStore) Ping() error {
 
 func newTestHandler(t *testing.T) (*Handler, *httptest.Server) {
 	t.Helper()
-	s, err := store.New(":memory:")
+	s, err := store.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
