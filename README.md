@@ -49,7 +49,7 @@ SHORTENER_TOKEN=mysecret go run .
 Example with custom config:
 
 ```bash
-SHORTENER_TOKEN=mysecret DB_DSN=:memory: PORT=9090 SHUTDOWN_TIMEOUT=10s go run .
+SHORTENER_TOKEN=mysecret DB_DSN=:memory: PORT=8080 SHUTDOWN_TIMEOUT=10s go run .
 ```
 
 ## Usage
