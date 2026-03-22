@@ -3,6 +3,7 @@ package admin
 import (
 	"crypto/subtle"
 	"embed"
+	"errors"
 	"html/template"
 	"log"
 	"net/http"
@@ -207,7 +208,7 @@ func (a *Admin) CreateURL(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			break
 		}
-		if !strings.Contains(err.Error(), "code already exists") {
+		if !errors.Is(err, store.ErrConflict) {
 			log.Printf("admin: create url: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return

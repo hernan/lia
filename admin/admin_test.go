@@ -13,13 +13,14 @@ import (
 )
 
 type mockStore struct {
-	urls      []*store.URL
-	listErr   error
-	createErr error
-	updateErr error
-	deleteErr error
-	getErr    error
-	nextID    int64
+	urls           []*store.URL
+	listErr        error
+	createErr      error
+	createErrTimes int // when > 0, return createErr this many times then succeed
+	updateErr      error
+	deleteErr      error
+	getErr         error
+	nextID         int64
 }
 
 func (m *mockStore) List() ([]*store.URL, error) {
@@ -55,7 +56,8 @@ func (m *mockStore) GetByID(id int64) (*store.URL, error) {
 }
 
 func (m *mockStore) Create(originalURL, code string) (*store.URL, error) {
-	if m.createErr != nil {
+	if m.createErr != nil && m.createErrTimes > 0 {
+		m.createErrTimes--
 		return nil, m.createErr
 	}
 	m.nextID++
@@ -671,6 +673,83 @@ func TestLogout(t *testing.T) {
 		t.Error("expected session cookie to be cleared")
 	}
 	_ = sm
+}
+
+func TestCreateURLConflictRetries(t *testing.T) {
+	// createErrTimes = 2: the first two Create calls return ErrConflict;
+	// the third succeeds. The handler retries up to 5 times, so it must
+	// succeed and redirect 303.
+	s := &mockStore{
+		createErr:      store.ErrConflict,
+		createErrTimes: 2,
+	}
+	a, sm := newTestAdmin(t, s)
+
+	mux := http.NewServeMux()
+	a.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	csrfCookie, form := csrfCookieAndForm()
+	form.Set("url", "https://example.com")
+
+	req, _ := http.NewRequest("POST", srv.URL+"/admin", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(loginSession(t, sm))
+	req.AddCookie(csrfCookie)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("expected 303 after retrying conflicts, got %d", resp.StatusCode)
+	}
+	if len(s.urls) != 1 {
+		t.Errorf("expected 1 URL created after retries, got %d", len(s.urls))
+	}
+}
+
+func TestCreateURLConflictExhausted(t *testing.T) {
+	// createErrTimes = 5: all five retry attempts return ErrConflict.
+	// The handler must give up and return 500.
+	s := &mockStore{
+		createErr:      store.ErrConflict,
+		createErrTimes: 5,
+	}
+	a, sm := newTestAdmin(t, s)
+
+	mux := http.NewServeMux()
+	a.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	csrfCookie, form := csrfCookieAndForm()
+	form.Set("url", "https://example.com")
+
+	req, _ := http.NewRequest("POST", srv.URL+"/admin", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(loginSession(t, sm))
+	req.AddCookie(csrfCookie)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("expected 500 when all retries exhausted, got %d", resp.StatusCode)
+	}
+	if len(s.urls) != 0 {
+		t.Errorf("expected 0 URLs after exhausted retries, got %d", len(s.urls))
+	}
 }
 
 func TestLogoutRequiresCSRF(t *testing.T) {
