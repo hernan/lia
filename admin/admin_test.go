@@ -124,7 +124,7 @@ func TestLoginGet(t *testing.T) {
 	a.RegisterRoutes(mux)
 
 	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	resp, err := http.Get(srv.URL + "/admin/login")
 	if err != nil {
@@ -142,7 +142,7 @@ func TestLoginPostInvalidCredentials(t *testing.T) {
 	mux := http.NewServeMux()
 	a.RegisterRoutes(mux)
 	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	// Get CSRF token first
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -177,7 +177,7 @@ func TestLoginPostValidCredentials(t *testing.T) {
 	mux := http.NewServeMux()
 	a.RegisterRoutes(mux)
 	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -220,7 +220,7 @@ func TestDashboardRequiresAuth(t *testing.T) {
 	mux := http.NewServeMux()
 	a.RegisterRoutes(mux)
 	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -246,7 +246,7 @@ func TestDashboardWithAuth(t *testing.T) {
 	mux := http.NewServeMux()
 	a.RegisterRoutes(mux)
 	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -276,7 +276,7 @@ func TestDashboardSearch(t *testing.T) {
 	mux := http.NewServeMux()
 	a.RegisterRoutes(mux)
 	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -301,7 +301,7 @@ func TestCreateURL(t *testing.T) {
 	mux := http.NewServeMux()
 	a.RegisterRoutes(mux)
 	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -334,7 +334,7 @@ func TestCreateURLRequiresCSRF(t *testing.T) {
 	mux := http.NewServeMux()
 	a.RegisterRoutes(mux)
 	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -363,7 +363,7 @@ func TestCreateURLInvalidURL(t *testing.T) {
 	mux := http.NewServeMux()
 	a.RegisterRoutes(mux)
 	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -400,7 +400,7 @@ func TestCreateURLMissingScheme(t *testing.T) {
 	mux := http.NewServeMux()
 	a.RegisterRoutes(mux)
 	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -433,7 +433,7 @@ func TestCreateURLDangerousScheme(t *testing.T) {
 	mux := http.NewServeMux()
 	a.RegisterRoutes(mux)
 	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -470,7 +470,7 @@ func TestEditURL(t *testing.T) {
 	mux := http.NewServeMux()
 	a.RegisterRoutes(mux)
 	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -499,7 +499,7 @@ func TestUpdateURL(t *testing.T) {
 	mux := http.NewServeMux()
 	a.RegisterRoutes(mux)
 	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -536,7 +536,7 @@ func TestUpdateURLInvalidURL(t *testing.T) {
 	mux := http.NewServeMux()
 	a.RegisterRoutes(mux)
 	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -573,7 +573,7 @@ func TestUpdateURLMissingScheme(t *testing.T) {
 	mux := http.NewServeMux()
 	a.RegisterRoutes(mux)
 	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -610,7 +610,7 @@ func TestDeleteURL(t *testing.T) {
 	mux := http.NewServeMux()
 	a.RegisterRoutes(mux)
 	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -642,7 +642,7 @@ func TestLogout(t *testing.T) {
 	mux := http.NewServeMux()
 	a.RegisterRoutes(mux)
 	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -825,7 +825,7 @@ func TestLogoutRequiresCSRF(t *testing.T) {
 	mux := http.NewServeMux()
 	a.RegisterRoutes(mux)
 	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
