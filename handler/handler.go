@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 
+	"urlshortener/internal/httputil"
 	"urlshortener/shortener"
 	"urlshortener/store"
 )
@@ -37,19 +38,19 @@ func (h *Handler) Shorten(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON")
+		httputil.WriteError(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
 
 	req.URL = strings.TrimSpace(req.URL)
 	if req.URL == "" {
-		writeError(w, http.StatusBadRequest, "url is required")
+		httputil.WriteError(w, http.StatusBadRequest, "url is required")
 		return
 	}
 
 	parsed, err := url.Parse(req.URL)
 	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		writeError(w, http.StatusBadRequest, "invalid url")
+		httputil.WriteError(w, http.StatusBadRequest, "invalid url")
 		return
 	}
 
@@ -61,16 +62,16 @@ func (h *Handler) Shorten(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		if !errors.Is(err, store.ErrConflict) {
-			writeError(w, http.StatusInternalServerError, "failed to create short URL")
+			httputil.WriteError(w, http.StatusInternalServerError, "failed to create short URL")
 			return
 		}
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to create short URL")
+		httputil.WriteError(w, http.StatusInternalServerError, "failed to create short URL")
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]any{
+	httputil.WriteJSON(w, http.StatusCreated, map[string]any{
 		"code": created.Code,
 		"url":  created.OriginalURL,
 	})
@@ -79,17 +80,17 @@ func (h *Handler) Shorten(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Resolve(w http.ResponseWriter, r *http.Request) {
 	code := r.PathValue("code")
 	if code == "" {
-		writeError(w, http.StatusBadRequest, "code is required")
+		httputil.WriteError(w, http.StatusBadRequest, "code is required")
 		return
 	}
 
 	u, err := h.store.GetByCode(code)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "not found")
+			httputil.WriteError(w, http.StatusNotFound, "not found")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -98,18 +99,8 @@ func (h *Handler) Resolve(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	if err := h.store.Ping(); err != nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "unhealthy"})
+		httputil.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "unhealthy"})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-}
-
-func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
-}
-
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
+	httputil.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
