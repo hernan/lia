@@ -74,6 +74,72 @@ func (s *Store) GetByCode(code string) (*URL, error) {
 	return &u, nil
 }
 
+func (s *Store) GetByID(id int64) (*URL, error) {
+	var u URL
+	err := s.db.QueryRow(
+		"SELECT id, code, original_url, created_at FROM urls WHERE id = ?",
+		id,
+	).Scan(&u.ID, &u.Code, &u.OriginalURL, &u.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+func (s *Store) List() ([]*URL, error) {
+	rows, err := s.db.Query(
+		"SELECT id, code, original_url, created_at FROM urls ORDER BY created_at DESC",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var urls []*URL
+	for rows.Next() {
+		var u URL
+		if err := rows.Scan(&u.ID, &u.Code, &u.OriginalURL, &u.CreatedAt); err != nil {
+			return nil, err
+		}
+		urls = append(urls, &u)
+	}
+	return urls, rows.Err()
+}
+
+func (s *Store) Search(query string) ([]*URL, error) {
+	rows, err := s.db.Query(
+		"SELECT id, code, original_url, created_at FROM urls WHERE original_url LIKE ? ORDER BY created_at DESC",
+		"%"+query+"%",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var urls []*URL
+	for rows.Next() {
+		var u URL
+		if err := rows.Scan(&u.ID, &u.Code, &u.OriginalURL, &u.CreatedAt); err != nil {
+			return nil, err
+		}
+		urls = append(urls, &u)
+	}
+	return urls, rows.Err()
+}
+
+func (s *Store) Update(id int64, originalURL string) error {
+	_, err := s.db.Exec(
+		"UPDATE urls SET original_url = ? WHERE id = ?",
+		originalURL, id,
+	)
+	return err
+}
+
+func (s *Store) Delete(id int64) error {
+	_, err := s.db.Exec("DELETE FROM urls WHERE id = ?", id)
+	return err
+}
+
 func (s *Store) Ping() error {
 	return s.db.Ping()
 }

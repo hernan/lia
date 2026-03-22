@@ -28,6 +28,26 @@ func (m *mockStore) GetByCode(code string) (*URL, error) {
 	return &URL{Code: code}, nil
 }
 
+func (m *mockStore) GetByID(id int64) (*URL, error) {
+	return &URL{ID: id}, nil
+}
+
+func (m *mockStore) List() ([]*URL, error) {
+	return nil, nil
+}
+
+func (m *mockStore) Search(query string) ([]*URL, error) {
+	return nil, nil
+}
+
+func (m *mockStore) Update(id int64, originalURL string) error {
+	return nil
+}
+
+func (m *mockStore) Delete(id int64) error {
+	return nil
+}
+
 func (m *mockStore) Ping() error {
 	return m.pingErr
 }

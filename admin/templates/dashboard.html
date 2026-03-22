@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - URL Shortener Admin</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #1a1a1a; }
+        .container { max-width: 960px; margin: 0 auto; padding: 2rem 1rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        h1 { font-size: 1.5rem; }
+        .logout-form { display: inline; }
+        .btn { padding: 0.5rem 1rem; border: none; border-radius: 4px; font-size: 0.875rem; cursor: pointer; }
+        .btn-danger { background: #dc2626; color: #fff; }
+        .btn-danger:hover { background: #b91c1c; }
+        .btn-primary { background: #2563eb; color: #fff; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-edit { background: #f59e0b; color: #fff; }
+        .btn-edit:hover { background: #d97706; }
+        .search-bar { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+        .search-bar input { flex: 1; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
+        .create-bar { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+        .create-bar input { flex: 1; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
+        table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #e5e5e5; }
+        th { background: #f9fafb; font-size: 0.8125rem; text-transform: uppercase; color: #6b7280; }
+        td { font-size: 0.875rem; }
+        td a { color: #2563eb; text-decoration: none; word-break: break-all; }
+        td a:hover { text-decoration: underline; }
+        .actions { display: flex; gap: 0.5rem; }
+        .empty { text-align: center; padding: 2rem; color: #6b7280; }
+        .flash { padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 1rem; font-size: 0.875rem; }
+        .flash-success { background: #d1fae5; color: #065f46; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>URL Shortener Admin</h1>
+            <form class="logout-form" method="POST" action="/admin/logout">
+                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                <button type="submit" class="btn btn-danger">Logout</button>
+            </form>
+        </div>
+
+        {{if .Flash}}<div class="flash flash-success">{{.Flash}}</div>{{end}}
+
+        <form class="create-bar" method="POST" action="/admin">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <input type="text" name="url" placeholder="https://example.com/new-url" required>
+            <button type="submit" class="btn btn-primary">Create Short URL</button>
+        </form>
+
+        <form class="search-bar" method="GET" action="/admin">
+            <input type="text" name="q" placeholder="Search by URL..." value="{{.Query}}">
+            <button type="submit" class="btn btn-primary">Search</button>
+        </form>
+
+        {{if .URLs}}
+        <table>
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Original URL</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .URLs}}
+                <tr>
+                    <td><a href="/{{.Code}}">{{.Code}}</a></td>
+                    <td><a href="{{.OriginalURL}}" target="_blank">{{.OriginalURL}}</a></td>
+                    <td>{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
+                    <td class="actions">
+                        <a href="/admin/urls/{{.ID}}/edit" class="btn btn-edit" style="text-decoration:none;">Edit</a>
+                        <form method="POST" action="/admin/urls/{{.ID}}/delete" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                            <button type="submit" class="btn btn-danger" onclick="return confirm('Delete this URL?')">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div class="empty">No URLs found.</div>
+        {{end}}
+    </div>
+</body>
+</html>

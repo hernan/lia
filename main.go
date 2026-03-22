@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,8 +11,10 @@ import (
 	"syscall"
 	"time"
 
+	"urlshortener/admin"
 	"urlshortener/auth"
 	"urlshortener/handler"
+	"urlshortener/internal/session"
 	"urlshortener/store"
 )
 
@@ -21,6 +24,8 @@ type config struct {
 	dbDsn           string
 	addr            string
 	shutdownTimeout time.Duration
+	adminUsername   string
+	adminPassword   string
 }
 
 func loadConfig() (config, error) {
@@ -59,6 +64,8 @@ func loadConfig() (config, error) {
 		dbDsn:           dbDsn,
 		addr:            ":" + addr,
 		shutdownTimeout: shutdownTimeout,
+		adminUsername:   os.Getenv("ADMIN_USERNAME"),
+		adminPassword:   os.Getenv("ADMIN_PASSWORD"),
 	}, nil
 }
 
@@ -93,6 +100,18 @@ func main() {
 	h := handler.New(s)
 
 	mux := http.NewServeMux()
+
+	// Admin panel routes (registered before catch-all).
+	if cfg.adminUsername != "" && cfg.adminPassword != "" {
+		secret := sha256.Sum256([]byte(cfg.token))
+		sm := session.New(secret[:])
+		ad, err := admin.New(s, sm, cfg.adminUsername, cfg.adminPassword)
+		if err != nil {
+			log.Fatal(err)
+		}
+		ad.RegisterRoutes(mux)
+	}
+
 	mux.HandleFunc("GET /health", h.Health)
 	mux.Handle("POST /shorten", auth.Middleware(cfg.token, http.HandlerFunc(h.Shorten)))
 	mux.HandleFunc("GET /{code}", h.Resolve)
