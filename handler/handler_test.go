@@ -315,3 +315,84 @@ func TestResolveNotFound(t *testing.T) {
 		t.Errorf("expected 404, got %d", resp.StatusCode)
 	}
 }
+
+func TestShortenURLValidation(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{"empty_url", `{"url":""}`},
+		{"whitespace_only", `{"url":"   "}`},
+		{"not_a_url", `{"url":"not a url"}`},
+		{"missing_scheme", `{"url":"example.com"}`},
+		{"missing_host", `{"url":"https://"}`},
+		{"javascript_scheme", `{"url":"javascript:alert(1)"}`},
+		{"file_scheme", `{"url":"file:///etc/passwd"}`},
+		{"data_scheme", `{"url":"data:text/html,<h1>hi</h1>"}`},
+		{"ftp_scheme", `{"url":"ftp://example.com/file"}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, ts := newTestHandler(t)
+
+			resp, err := http.Post(ts.URL+"/shorten", "application/json", strings.NewReader(tt.body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Errorf("expected 400, got %d", resp.StatusCode)
+			}
+
+			var result map[string]string
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				t.Fatal(err)
+			}
+			if result["error"] != "invalid url" && result["error"] != "url is required" {
+				t.Errorf("expected 'invalid url' or 'url is required', got %q", result["error"])
+			}
+		})
+	}
+}
+
+func TestShortenValidURLs(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{"https_url", `{"url":"https://example.com"}`},
+		{"http_url", `{"url":"http://example.com/path"}`},
+		{"https_with_query", `{"url":"https://example.com/search?q=test"}`},
+		{"https_with_fragment", `{"url":"https://example.com/page#section"}`},
+		{"https_with_port", `{"url":"https://example.com:8080/path"}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, ts := newTestHandler(t)
+
+			resp, err := http.Post(ts.URL+"/shorten", "application/json", strings.NewReader(tt.body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusCreated {
+				t.Errorf("expected 201, got %d", resp.StatusCode)
+			}
+
+			var result struct {
+				Code string `json:"code"`
+				URL  string `json:"url"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				t.Fatal(err)
+			}
+			if result.Code == "" {
+				t.Error("expected non-empty code")
+			}
+		})
+	}
+}
