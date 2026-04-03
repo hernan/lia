@@ -2,6 +2,7 @@ package admin
 
 import (
 	"bytes"
+	"context"
 	"crypto/subtle"
 	"embed"
 	"errors"
@@ -16,6 +17,13 @@ import (
 	"urlshortener/shortener"
 	"urlshortener/store"
 )
+
+type ctxKey struct{}
+
+type sessionCtx struct {
+	Flash      string
+	FlashError bool
+}
 
 //go:embed templates/*.html
 var templateFS embed.FS
@@ -77,12 +85,16 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 
 func (a *Admin) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, err := a.sessions.Validate(r)
+		_, flash, flashError, err := a.sessions.Validate(r)
 		if err != nil {
 			http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
 			return
 		}
-		next.ServeHTTP(w, r)
+		ctx := context.WithValue(r.Context(), ctxKey{}, sessionCtx{
+			Flash:      flash,
+			FlashError: flashError,
+		})
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
@@ -180,8 +192,11 @@ func (a *Admin) Dashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := r.URL.Query().Get("q")
-	flash := r.URL.Query().Get("flash")
-	flashError := r.URL.Query().Get("flash_error") == "1"
+	s, ok := r.Context().Value(ctxKey{}).(sessionCtx)
+	if !ok {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 
 	var urls []*store.URL
 	if query != "" {
@@ -195,11 +210,13 @@ func (a *Admin) Dashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	a.sessions.ClearFlash(w, r)
+
 	a.render(w, "dashboard.html", dashboardData{
 		URLs:       urls,
 		Query:      query,
-		Flash:      flash,
-		FlashError: flashError,
+		Flash:      s.Flash,
+		FlashError: s.FlashError,
 		CSRFToken:  csrfToken,
 	})
 }
@@ -207,11 +224,13 @@ func (a *Admin) Dashboard(w http.ResponseWriter, r *http.Request) {
 func (a *Admin) CreateURL(w http.ResponseWriter, r *http.Request) {
 	originalURL := strings.TrimSpace(r.FormValue("url"))
 	if originalURL == "" {
-		http.Redirect(w, r, "/admin?flash=url+is+required&flash_error=1", http.StatusSeeOther)
+		a.sessions.SetFlash(w, r, "url is required", true)
+		http.Redirect(w, r, "/admin", http.StatusSeeOther)
 		return
 	}
 	if !validURL(originalURL) {
-		http.Redirect(w, r, "/admin?flash=invalid+url&flash_error=1", http.StatusSeeOther)
+		a.sessions.SetFlash(w, r, "invalid url", true)
+		http.Redirect(w, r, "/admin", http.StatusSeeOther)
 		return
 	}
 
@@ -234,7 +253,8 @@ func (a *Admin) CreateURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/admin?flash=URL+created", http.StatusSeeOther)
+	a.sessions.SetFlash(w, r, "URL created", false)
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }
 
 type editData struct {
@@ -291,7 +311,8 @@ func (a *Admin) UpdateURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/admin?flash=URL+updated", http.StatusSeeOther)
+	a.sessions.SetFlash(w, r, "URL updated", false)
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }
 
 func (a *Admin) renderEditError(w http.ResponseWriter, r *http.Request, id int64, msg string) {
@@ -325,5 +346,6 @@ func (a *Admin) DeleteURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/admin?flash=URL+deleted", http.StatusSeeOther)
+	a.sessions.SetFlash(w, r, "URL deleted", false)
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }

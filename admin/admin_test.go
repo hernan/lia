@@ -3,6 +3,7 @@ package admin
 import (
 	"errors"
 	"html/template"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -387,8 +388,8 @@ func TestCreateURLInvalidURL(t *testing.T) {
 		t.Errorf("expected 0 URLs in store, got %d", len(s.urls))
 	}
 	loc := resp.Header.Get("Location")
-	if !strings.Contains(loc, "flash_error=1") {
-		t.Errorf("expected redirect with flash_error, got %s", loc)
+	if loc != "/admin" {
+		t.Errorf("expected redirect to /admin, got %s", loc)
 	}
 }
 
@@ -998,5 +999,210 @@ func TestDashboardSearchStoreError(t *testing.T) {
 	}
 	if resp.StatusCode != http.StatusInternalServerError {
 		t.Errorf("expected 500 on search store error, got %d", resp.StatusCode)
+	}
+}
+
+func TestFlashMessageAfterCreate(t *testing.T) {
+	s := &mockStore{}
+	a, sm := newTestAdmin(t, s)
+
+	mux := http.NewServeMux()
+	a.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	csrfCookie, form := csrfCookieAndForm()
+	form.Set("url", "https://example.com")
+
+	req, _ := http.NewRequest("POST", srv.URL+"/admin", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(loginSession(t, sm))
+	req.AddCookie(csrfCookie)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", resp.StatusCode)
+	}
+
+	var sessionCookie *http.Cookie
+	for _, c := range resp.Cookies() {
+		if c.Name == "session" {
+			sessionCookie = c
+			break
+		}
+	}
+	if sessionCookie == nil {
+		t.Fatal("expected session cookie in redirect response")
+	}
+
+	dashReq, _ := http.NewRequest("GET", srv.URL+"/admin", nil)
+	dashReq.AddCookie(sessionCookie)
+
+	dashResp, err := client.Do(dashReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dashResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", dashResp.StatusCode)
+	}
+
+	body, err := io.ReadAll(dashResp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "URL created") {
+		t.Error("expected flash message 'URL created' in dashboard response")
+	}
+}
+
+func TestFlashMessageClearedAfterDashboardRender(t *testing.T) {
+	s := &mockStore{}
+	a, sm := newTestAdmin(t, s)
+
+	mux := http.NewServeMux()
+	a.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	csrfCookie, form := csrfCookieAndForm()
+	form.Set("url", "https://example.com")
+
+	req, _ := http.NewRequest("POST", srv.URL+"/admin", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(loginSession(t, sm))
+	req.AddCookie(csrfCookie)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", resp.StatusCode)
+	}
+
+	var sessionCookie *http.Cookie
+	for _, c := range resp.Cookies() {
+		if c.Name == "session" {
+			sessionCookie = c
+			break
+		}
+	}
+	if sessionCookie == nil {
+		t.Fatal("expected session cookie in redirect response")
+	}
+
+	dashReq, _ := http.NewRequest("GET", srv.URL+"/admin", nil)
+	dashReq.AddCookie(sessionCookie)
+
+	dashResp, err := client.Do(dashReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dashResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", dashResp.StatusCode)
+	}
+
+	var clearCookie *http.Cookie
+	for _, c := range dashResp.Cookies() {
+		if c.Name == "session" {
+			clearCookie = c
+			break
+		}
+	}
+	if clearCookie == nil {
+		t.Fatal("expected session cookie in dashboard response (with cleared flash)")
+	}
+
+	secondReq, _ := http.NewRequest("GET", srv.URL+"/admin", nil)
+	secondReq.AddCookie(clearCookie)
+
+	secondResp, err := client.Do(secondReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if secondResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 on second dashboard visit, got %d", secondResp.StatusCode)
+	}
+
+	secondBody, err := io.ReadAll(secondResp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(secondBody), "URL created") {
+		t.Error("expected flash message to be cleared on second dashboard visit")
+	}
+}
+
+func TestFlashMessageAfterDelete(t *testing.T) {
+	s := &mockStore{
+		urls: []*store.URL{
+			{ID: 1, Code: "abc123", OriginalURL: "https://example.com"},
+		},
+	}
+	a, sm := newTestAdmin(t, s)
+
+	mux := http.NewServeMux()
+	a.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	csrfCookie, form := csrfCookieAndForm()
+
+	req, _ := http.NewRequest("POST", srv.URL+"/admin/urls/1/delete", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(loginSession(t, sm))
+	req.AddCookie(csrfCookie)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", resp.StatusCode)
+	}
+
+	var sessionCookie *http.Cookie
+	for _, c := range resp.Cookies() {
+		if c.Name == "session" {
+			sessionCookie = c
+			break
+		}
+	}
+	if sessionCookie == nil {
+		t.Fatal("expected session cookie in redirect response")
+	}
+
+	dashReq, _ := http.NewRequest("GET", srv.URL+"/admin", nil)
+	dashReq.AddCookie(sessionCookie)
+
+	dashResp, err := client.Do(dashReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dashResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", dashResp.StatusCode)
+	}
+
+	body, err := io.ReadAll(dashResp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "URL deleted") {
+		t.Error("expected flash message 'URL deleted' in dashboard response")
 	}
 }

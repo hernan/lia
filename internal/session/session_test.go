@@ -1,6 +1,8 @@
 package session
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -17,14 +19,31 @@ func TestCreateAndValidate(t *testing.T) {
 	if cookie.Name != "session" {
 		t.Errorf("expected cookie name session, got %s", cookie.Name)
 	}
-	if !strings.HasPrefix(cookie.Value, "admin|") {
-		t.Errorf("expected cookie value to start with admin|, got %s", cookie.Value)
+
+	parts := strings.SplitN(cookie.Value, "|", 2)
+	if len(parts) != 2 {
+		t.Fatalf("expected cookie value to contain |, got %s", cookie.Value)
+	}
+
+	raw, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		t.Fatalf("failed to decode cookie data: %v", err)
+	}
+
+	var data struct {
+		Username string `json:"u"`
+	}
+	if err := json.Unmarshal(raw, &data); err != nil {
+		t.Fatalf("failed to unmarshal cookie data: %v", err)
+	}
+	if data.Username != "admin" {
+		t.Errorf("expected admin, got %s", data.Username)
 	}
 
 	r := httptest.NewRequest("GET", "/admin", nil)
 	r.AddCookie(cookie)
 
-	username, err := m.Validate(r)
+	username, _, _, err := m.Validate(r)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +56,7 @@ func TestValidateNoCookie(t *testing.T) {
 	m := New(testSecret)
 	r := httptest.NewRequest("GET", "/admin", nil)
 
-	_, err := m.Validate(r)
+	_, _, _, err := m.Validate(r)
 	if err == nil {
 		t.Fatal("expected error when no cookie present")
 	}
@@ -46,12 +65,12 @@ func TestValidateNoCookie(t *testing.T) {
 func TestValidateTamperedValue(t *testing.T) {
 	m := New(testSecret)
 	cookie := m.Create("admin")
-	cookie.Value = "hacker|badmac"
+	cookie.Value = `{"u":"hacker"}|badmac`
 
 	r := httptest.NewRequest("GET", "/admin", nil)
 	r.AddCookie(cookie)
 
-	_, err := m.Validate(r)
+	_, _, _, err := m.Validate(r)
 	if err == nil {
 		t.Fatal("expected error for tampered cookie")
 	}
@@ -65,7 +84,7 @@ func TestValidateDifferentSecret(t *testing.T) {
 	r := httptest.NewRequest("GET", "/admin", nil)
 	r.AddCookie(cookie)
 
-	_, err := m2.Validate(r)
+	_, _, _, err := m2.Validate(r)
 	if err == nil {
 		t.Fatal("expected error with different secret")
 	}
@@ -76,9 +95,20 @@ func TestValidateMalformedCookie(t *testing.T) {
 	r := httptest.NewRequest("GET", "/admin", nil)
 	r.AddCookie(&http.Cookie{Name: "session", Value: "no-pipe-separator"})
 
-	_, err := m.Validate(r)
+	_, _, _, err := m.Validate(r)
 	if err == nil {
 		t.Fatal("expected error for malformed cookie")
+	}
+}
+
+func TestValidateMalformedJSON(t *testing.T) {
+	m := New(testSecret)
+	r := httptest.NewRequest("GET", "/admin", nil)
+	r.AddCookie(&http.Cookie{Name: "session", Value: "not-json|badmac"})
+
+	_, _, _, err := m.Validate(r)
+	if err == nil {
+		t.Fatal("expected error for malformed JSON")
 	}
 }
 
@@ -97,6 +127,113 @@ func TestDestroy(t *testing.T) {
 	}
 	if c.MaxAge != -1 {
 		t.Errorf("expected MaxAge -1, got %d", c.MaxAge)
+	}
+}
+
+func TestSetFlashAndClearFlash(t *testing.T) {
+	m := New(testSecret)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/admin", nil)
+	r.AddCookie(m.Create("admin"))
+
+	m.SetFlash(w, r, "something happened", true)
+
+	resp := w.Result()
+	cookies := resp.Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("expected 1 cookie, got %d", len(cookies))
+	}
+
+	newReq := httptest.NewRequest("GET", "/admin", nil)
+	newReq.AddCookie(cookies[0])
+
+	_, flash, flashError, err := m.Validate(newReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if flash != "something happened" {
+		t.Errorf("expected flash message, got %q", flash)
+	}
+	if !flashError {
+		t.Error("expected flash error to be true")
+	}
+
+	clearW := httptest.NewRecorder()
+	m.ClearFlash(clearW, newReq)
+
+	clearReq := httptest.NewRequest("GET", "/admin", nil)
+	clearReq.AddCookie(clearW.Result().Cookies()[0])
+
+	_, flash, flashError, err = m.Validate(clearReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if flash != "" {
+		t.Errorf("expected empty flash after clear, got %q", flash)
+	}
+	if flashError {
+		t.Error("expected flash error to be false after clear")
+	}
+}
+
+func TestFlashRoundTrip(t *testing.T) {
+	m := New(testSecret)
+	createW := httptest.NewRecorder()
+	http.SetCookie(createW, m.Create("admin"))
+
+	createReq := httptest.NewRequest("GET", "/admin", nil)
+	createReq.AddCookie(createW.Result().Cookies()[0])
+
+	flashW := httptest.NewRecorder()
+	m.SetFlash(flashW, createReq, "URL created", false)
+
+	flashReq := httptest.NewRequest("GET", "/admin", nil)
+	flashReq.AddCookie(flashW.Result().Cookies()[0])
+
+	_, flash, flashError, err := m.Validate(flashReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if flash != "URL created" {
+		t.Errorf("expected 'URL created', got %q", flash)
+	}
+	if flashError {
+		t.Error("expected flash error to be false")
+	}
+}
+
+func TestClearFlashPreservesUsername(t *testing.T) {
+	m := New(testSecret)
+	createW := httptest.NewRecorder()
+	http.SetCookie(createW, m.Create("testuser"))
+
+	createReq := httptest.NewRequest("GET", "/admin", nil)
+	createReq.AddCookie(createW.Result().Cookies()[0])
+
+	flashW := httptest.NewRecorder()
+	m.SetFlash(flashW, createReq, "test message", true)
+
+	flashReq := httptest.NewRequest("GET", "/admin", nil)
+	flashReq.AddCookie(flashW.Result().Cookies()[0])
+
+	clearW := httptest.NewRecorder()
+	m.ClearFlash(clearW, flashReq)
+
+	clearReq := httptest.NewRequest("GET", "/admin", nil)
+	clearReq.AddCookie(clearW.Result().Cookies()[0])
+
+	username, flash, flashError, err := m.Validate(clearReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if username != "testuser" {
+		t.Errorf("expected username 'testuser', got %q", username)
+	}
+	if flash != "" {
+		t.Errorf("expected empty flash, got %q", flash)
+	}
+	if flashError {
+		t.Error("expected flash error to be false")
 	}
 }
 
