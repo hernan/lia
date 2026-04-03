@@ -841,3 +841,162 @@ func TestLogoutRequiresCSRF(t *testing.T) {
 		t.Errorf("expected 403 without CSRF token, got %d", resp.StatusCode)
 	}
 }
+
+func TestEditURLInvalidID(t *testing.T) {
+	s := &mockStore{}
+	a, sm := newTestAdmin(t, s)
+
+	mux := http.NewServeMux()
+	a.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	req, _ := http.NewRequest("GET", srv.URL+"/admin/urls/abc/edit", nil)
+	req.AddCookie(loginSession(t, sm))
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid ID, got %d", resp.StatusCode)
+	}
+}
+
+func TestEditURLNotFound(t *testing.T) {
+	s := &mockStore{getErr: errors.New("not found")}
+	a, sm := newTestAdmin(t, s)
+
+	mux := http.NewServeMux()
+	a.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	req, _ := http.NewRequest("GET", srv.URL+"/admin/urls/999/edit", nil)
+	req.AddCookie(loginSession(t, sm))
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", resp.StatusCode)
+	}
+}
+
+func TestUpdateURLInvalidID(t *testing.T) {
+	s := &mockStore{}
+	a, sm := newTestAdmin(t, s)
+
+	mux := http.NewServeMux()
+	a.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	csrfCookie, form := csrfCookieAndForm()
+	form.Set("url", "https://new.com")
+
+	req, _ := http.NewRequest("POST", srv.URL+"/admin/urls/abc/edit", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(loginSession(t, sm))
+	req.AddCookie(csrfCookie)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid ID, got %d", resp.StatusCode)
+	}
+}
+
+func TestDeleteURLInvalidID(t *testing.T) {
+	s := &mockStore{}
+	a, sm := newTestAdmin(t, s)
+
+	mux := http.NewServeMux()
+	a.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	csrfCookie, form := csrfCookieAndForm()
+
+	req, _ := http.NewRequest("POST", srv.URL+"/admin/urls/abc/delete", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(loginSession(t, sm))
+	req.AddCookie(csrfCookie)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid ID, got %d", resp.StatusCode)
+	}
+}
+
+func TestDashboardStoreError(t *testing.T) {
+	s := &mockStore{listErr: errors.New("db error")}
+	a, sm := newTestAdmin(t, s)
+
+	mux := http.NewServeMux()
+	a.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	req, _ := http.NewRequest("GET", srv.URL+"/admin", nil)
+	req.AddCookie(loginSession(t, sm))
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("expected 500 on store error, got %d", resp.StatusCode)
+	}
+}
+
+func TestDashboardSearchStoreError(t *testing.T) {
+	s := &mockStore{listErr: errors.New("db error")}
+	a, sm := newTestAdmin(t, s)
+
+	mux := http.NewServeMux()
+	a.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	req, _ := http.NewRequest("GET", srv.URL+"/admin?q=test", nil)
+	req.AddCookie(loginSession(t, sm))
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("expected 500 on search store error, got %d", resp.StatusCode)
+	}
+}
