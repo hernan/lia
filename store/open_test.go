@@ -262,3 +262,40 @@ func TestDelete(t *testing.T) {
 		t.Fatal("expected error after delete")
 	}
 }
+
+func TestConcurrentCreate(t *testing.T) {
+	s := newTestStore(t)
+
+	const goroutines = 10
+	const perGoroutine = 10
+
+	done := make(chan error, goroutines)
+	for g := range goroutines {
+		go func(id int) {
+			for i := range perGoroutine {
+				code := fmt.Sprintf("g%dc%d", id, i)
+				url := fmt.Sprintf("https://example.com/%d/%d", id, i)
+				_, err := s.Create(url, code)
+				if err != nil {
+					done <- err
+					return
+				}
+			}
+			done <- nil
+		}(g)
+	}
+
+	for range goroutines {
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	urls, err := s.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(urls) != goroutines*perGoroutine {
+		t.Errorf("expected %d URLs, got %d", goroutines*perGoroutine, len(urls))
+	}
+}
