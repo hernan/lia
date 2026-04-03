@@ -1,0 +1,2 @@
+#! /bin/zsh
+SHORTENER_TOKEN=mysecret ADMIN_USERNAME=admin ADMIN_PASSWORD=changeme go run .
